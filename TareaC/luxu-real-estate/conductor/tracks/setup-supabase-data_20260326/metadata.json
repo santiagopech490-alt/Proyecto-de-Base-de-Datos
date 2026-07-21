@@ -1,0 +1,8 @@
+{
+  "track_id": "setup-supabase-data_20260326",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-03-26T12:00:00Z",
+  "updated_at": "2026-03-26T12:00:00Z",
+  "description": "Establecer la conexión con Supabase utilizando .env.local y seedear 30 propiedades premium de alta fidelidad con al menos 5 imágenes cada una, incluyendo geolocalización, amenidades y slugs descriptivos."
+}

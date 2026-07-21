@@ -1,0 +1,8 @@
+{
+  "track_id": "add-new-property-form_20260407",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-04-07T12:00:00Z",
+  "updated_at": "2026-04-07T12:00:00Z",
+  "description": "High-fidelity property creation form (Add New Property) with a modern dashboard aesthetic, built using shadcn/ui and Tailwind CSS 4."
+}

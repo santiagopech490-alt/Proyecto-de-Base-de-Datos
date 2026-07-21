@@ -1,0 +1,70 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+web_flat/
+
+# Build outputs
+build/
+dist/
+out/
+bin/
+obj/
+*.exe
+*.o
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+*.class
+*.jar
+*.war
+
+# Large archive files
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+*.tgz
+*.zip.*
+*.rar.*
+
+# Python environment and cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Editor / IDE configuration folders
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln.docstates
+.vs/
+.expo/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# Sensitive information
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local

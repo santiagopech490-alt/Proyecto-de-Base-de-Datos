@@ -1,0 +1,8 @@
+{
+  "track_id": "user_profile_dashboard_20260410_imagen10",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-04-10T15:27:00Z",
+  "updated_at": "2026-04-10T15:27:00Z",
+  "description": "High-fidelity User Profile and Personal Dashboard with dynamic activity tracking, property favorites grid, and account management using shadcn/ui and Tailwind CSS 4."
+}

@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplicacion Web de Probabilidad y Estadística</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #403f6f;
+            --secondary-color: #1e40af;
+            --background-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-color: #1f2937;
+            --border-radius: 8px;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding-bottom: 2rem;
+        }
+
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 1rem 0;
+            text-align: center;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+        }
+
+        .card h2 {
+            font-size: 1.25rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+        }
+
+        /* Inputs & Buttons */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        textarea, input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--secondary-color);
+        }
+
+        button.secondary {
+            background-color: #6b7280;
+        }
+        
+        button.secondary:hover {
+            background-color: #4b5563;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+        }
+
+        .stat-item {
+            background-color: #eff6ff;
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-value {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        /* Tables */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        th, td {
+            padding: 0.75rem;
+            text-align: center;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+
+        /* Charts */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+
+        /* Sets & Probability Specifics */
+        .result-box {
+            background-color: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            margin-top: 1rem;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+
+        .tree-container {
+            border: 1px solid #e5e7eb;
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            margin-top: 1rem;
+            background-color: white;
+            overflow: auto;
+            text-align: center;
+        }
+
+        canvas#treeCanvas {
+            display: block;
+            margin: 0 auto;
+        }
+        
+        .section-title {
+            grid-column: 1 / -1;
+            margin: 2rem 0 1rem;
+            font-size: 1.5rem;
+            color: var(--text-color);
+            border-left: 5px solid var(--primary-color);
+            padding-left: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Aplicacion Web de Probabilidad y Estadística</h1>
+    <p>Herramienta académica completa para análisis de datos</p>
+</header>
+
+<div class="container">
+
+    <!-- SECCIÓN 1: DATOS Y ESTADÍSTICA DESCRIPTIVA -->
+    <h3 class="section-title">Estadística Descriptiva</h3>
+    <div class="grid">
+        <!-- Entrada de Datos -->
+        <div class="card">
+            <h2>Entrada de Datos</h2>
+            <div class="form-group">
+                <label for="dataInput">Ingrese números separados por comas o espacios:</label>
+                <textarea id="dataInput" placeholder="Ej: 10, 15, 20, 15, 30..."></textarea>
+            </div>
+            <div class="btn-group">
+                <button onclick="calculateStats()">Calcular Todo</button>
+                <button class="secondary" onclick="generateRandomData()">Generar Aleatorios (20)</button>
+            </div>
+            <p id="dataCount" style="margin-top: 0.5rem; font-size: 0.9rem; color: #666;"></p>
+        </div>
+
+        <!-- Resultados Estadísticos -->
+        <div class="card">
+            <h2>Resultados Estadísticos</h2>
+            <div class="stats-grid" id="statsOutput">
+                <!-- Se llenará con JS -->
+                <div class="stat-item"><div class="stat-label">Media</div><div class="stat-value">-</div></div>
+                <div class="stat-item"><div class="stat-label">Mediana</div><div class="stat-value">-</div></div>
+                <div class="stat-item"><div class="stat-label">Moda</div><div class="stat-value">-</div></div>
+                <div class="stat-item"><div class="stat-label">Mínimo</div><div class="stat-value">-</div></div>
+                <div class="stat-item"><div class="stat-label">Máximo</div><div class="stat-value">-</div></div>
+                <div class="stat-item"><div class="stat-label">Rango</div><div class="stat-value">-</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de Frecuencias -->
+    <div class="card" style="margin-bottom: 2rem;">
+        <h2>Tabla de Frecuencias</h2>
+        <div class="table-container">
+            <table id="frequencyTable">
+                <thead>
+                    <tr>
+                        <th>Clase (x)</th>
+                        <th>Frecuencia Absoluta (fi)</th>
+                        <th>Frecuencia Relativa (fr)</th>
+                        <th>Frec. Abs. Acumulada (Fi)</th>
+                        <th>Frec. Rel. Acumulada (Fr)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="5">Ingrese datos para generar la tabla</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 2: VISUALIZACIÓN -->
+    <h3 class="section-title">Visualización de Datos</h3>
+    <div class="grid">
+        <div class="card">
+            <h2>Histograma</h2>
+            <div class="chart-container">
+                <canvas id="histogramChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Polígono de Frecuencias</h2>
+            <div class="chart-container">
+                <canvas id="polygonChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Ojiva (Acumulada)</h2>
+            <div class="chart-container">
+                <canvas id="ogiveChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Diagrama de Pareto</h2>
+            <div class="chart-container">
+                <canvas id="paretoChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 3: CONJUNTOS Y PROBABILIDAD -->
+    <h3 class="section-title">Conjuntos, Conteo y Probabilidad</h3>
+    <div class="grid">
+        
+        <!-- Operaciones con Conjuntos -->
+        <div class="card">
+            <h2>Operaciones con Conjuntos</h2>
+            <div class="form-group">
+                <label>Conjunto A (separado por comas):</label>
+                <input type="text" id="setA" placeholder="Ej: 1, 2, 3, 4">
+            </div>
+            <div class="form-group">
+                <label>Conjunto B (separado por comas):</label>
+                <input type="text" id="setB" placeholder="Ej: 3, 4, 5, 6">
+            </div>
+            <div class="btn-group">
+                <button onclick="calcSetOp('union')">Unión (A ∪ B)</button>
+                <button onclick="calcSetOp('intersection')">Intersección (A ∩ B)</button>
+                <button onclick="calcSetOp('difference')">Diferencia (A - B)</button>
+            </div>
+            <div id="setResult" class="result-box">Resultado: </div>
+        </div>
+
+        <!-- Calculadora de Permutaciones/Combinaciones -->
+        <div class="card">
+            <h2>Técnicas de Conteo</h2>
+            <div class="form-group" style="display: flex; gap: 1rem;">
+                <div style="flex: 1;">
+                    <label>n (Total):</label>
+                    <input type="number" id="countN" min="0">
+                </div>
+                <div style="flex: 1;">
+                    <label>r (Selección):</label>
+                    <input type="number" id="countR" min="0">
+                </div>
+            </div>
+            <div class="btn-group">
+                <button onclick="calcPermutation()">Permutación (nPr)</button>
+                <button onclick="calcCombination()">Combinación (nCr)</button>
+            </div>
+            <div id="countResult" class="result-box">Resultado: </div>
+        </div>
+
+        <!-- Probabilidad Simple y Árbol -->
+        <div class="card" style="grid-column: 1 / -1;">
+            <h2>Probabilidad y Diagrama de Árbol</h2>
+            <div class="grid" style="grid-template-columns: 1fr 2fr; gap: 1rem; margin-bottom: 0;">
+                <div>
+                    <h3>Regla Multiplicativa</h3>
+                    <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">
+                        Ejemplo visual: Simular lanzamientos de una moneda o eventos simples.
+                    </p>
+                    <div class="form-group">
+                        <label>Etapas (Niveles del árbol):</label>
+                        <input type="number" id="treeLevels" value="3" min="1" max="5">
+                    </div>
+                    <div class="form-group">
+                        <label>Opciones por etapa:</label>
+                        <input type="number" id="treeOptions" value="2" min="1" max="3">
+                    </div>
+                    <button onclick="generateTree()">Generar Diagrama</button>
+                    
+                    <h3 style="margin-top: 1.5rem;">Probabilidad Simple</h3>
+                    <div class="form-group">
+                        <label>Casos Favorables:</label>
+                        <input type="number" id="probFav" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Casos Totales:</label>
+                        <input type="number" id="probTotal" min="1">
+                    </div>
+                    <button onclick="calcSimpleProb()">Calcular P(E)</button>
+                    <div id="probResult" class="result-box" style="margin-top: 0.5rem;">Resultado: </div>
+                </div>
+                <div class="tree-container">
+                    <canvas id="treeCanvas" width="600" height="400"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+    // --- VARIABLES GLOBALES PARA GRÁFICOS ---
+    let charts = {
+        histogram: null,
+        polygon: null,
+        ogive: null,
+        pareto: null
+    };
+
+    // --- FUNCIONES DE UTILIDAD ---
+    const getValues = () => {
+        const input = document.getElementById('dataInput').value;
+        // Separar por comas, espacios o saltos de línea
+        const values = input.split(/[\s,]+/).filter(v => v !== '').map(Number);
+        return values.filter(n => !isNaN(n)).sort((a, b) => a - b);
+    };
+
+    const factorial = (n) => {
+        if (n < 0) return -1;
+        if (n == 0) return 1;
+        let res = 1;
+        for(let i=1; i<=n; i++) res *= i;
+        return res;
+    };
+
+    // --- GENERACIÓN DE DATOS ---
+    function generateRandomData() {
+        const count = 20;
+        const data = [];
+        for (let i = 0; i < count; i++) {
+            data.push(Math.floor(Math.random() * 50) + 1); // 1 a 50
+        }
+        document.getElementById('dataInput').value = data.join(', ');
+        calculateStats();
+    }
+
+    // --- LÓGICA PRINCIPAL DE ESTADÍSTICA ---
+    function calculateStats() {
+        const data = getValues();
+        if (data.length === 0) {
+            alert("Por favor ingrese datos válidos.");
+            return;
+        }
+
+        document.getElementById('dataCount').innerText = `Datos procesados: ${data.length}`;
+
+        // 1. Tendencia Central y Dispersión
+        const sum = data.reduce((a, b) => a + b, 0);
+        const mean = sum / data.length;
+        const min = data[0];
+        const max = data[data.length - 1];
+        const range = max - min;
+        
+        // Mediana
+        let median;
+        const mid = Math.floor(data.length / 2);
+        if (data.length % 2 === 0) {
+            median = (data[mid - 1] + data[mid]) / 2;
+        } else {
+            median = data[mid];
+        }
+
+        // Moda
+        const frequency = {};
+        let maxFreq = 0;
+        let modes = [];
+        data.forEach(val => {
+            frequency[val] = (frequency[val] || 0) + 1;
+            if (frequency[val] > maxFreq) maxFreq = frequency[val];
+        });
+        for (const key in frequency) {
+            if (frequency[key] === maxFreq) modes.push(key);
+        }
+        const modeStr = modes.length === data.length ? "No hay moda" : modes.join(', ');
+
+        // Actualizar UI Estadísticas
+        const statsContainer = document.getElementById('statsOutput');
+        statsContainer.innerHTML = `
+            <div class="stat-item"><div class="stat-label">Media</div><div class="stat-value">${mean.toFixed(2)}</div></div>
+            <div class="stat-item"><div class="stat-label">Mediana</div><div class="stat-value">${median}</div></div>
+            <div class="stat-item"><div class="stat-label">Moda</div><div class="stat-value">${modeStr}</div></div>
+            <div class="stat-item"><div class="stat-label">Mínimo</div><div class="stat-value">${min}</div></div>
+            <div class="stat-item"><div class="stat-label">Máximo</div><div class="stat-value">${max}</div></div>
+            <div class="stat-item"><div class="stat-label">Rango</div><div class="stat-value">${range}</div></div>
+            <div class="stat-item"><div class="stat-label">Total Datos (N)</div><div class="stat-value">${data.length}</div></div>
+        `;
+
+        // 2. Tabla de Frecuencias
+        // Usaremos valores únicos como clases para datos discretos simples
+        const uniqueValues = [...new Set(data)].sort((a,b) => a - b);
+        let currentFi = 0;
+        let currentFr = 0;
+        
+        const tableBody = document.querySelector('#frequencyTable tbody');
+        tableBody.innerHTML = '';
+        
+        // Preparar datos para gráficas
+        const chartLabels = [];
+        const chartDataFi = [];
+        const chartDataFiAccum = [];
+
+        uniqueValues.forEach(val => {
+            const fi = frequency[val];
+            const fr = fi / data.length;
+            currentFi += fi;
+            currentFr += fr;
+
+            const row = `
+                <tr>
+                    <td>${val}</td>
+                    <td>${fi}</td>
+                    <td>${fr.toFixed(4)}</td>
+                    <td>${currentFi}</td>
+                    <td>${currentFr.toFixed(4)}</td>
+                </tr>
+            `;
+            tableBody.insertAdjacentHTML('beforeend', row);
+
+            chartLabels.push(val);
+            chartDataFi.push(fi);
+            chartDataFiAccum.push(currentFi);
+        });
+
+        // 3. Renderizar Gráficas
+        renderCharts(chartLabels, chartDataFi, chartDataFiAccum, data.length);
+    }
+
+    function renderCharts(labels, dataFi, dataFiAccum, totalN) {
+        // Destruir gráficos anteriores si existen
+        Object.values(charts).forEach(chart => {
+            if (chart) chart.destroy();
+        });
+
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'top' } }
+        };
+
+        // 1. Histograma (Bar Chart)
+        const ctxHist = document.getElementById('histogramChart').getContext('2d');
+        charts.histogram = new Chart(ctxHist, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Frecuencia Absoluta (fi)',
+                    data: dataFi,
+                    backgroundColor: 'rgba(37, 99, 235, 0.6)',
+                    borderColor: 'rgba(37, 99, 235, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: commonOptions
+        });
+
+        // 2. Polígono de Frecuencias (Line Chart)
+        const ctxPoly = document.getElementById('polygonChart').getContext('2d');
+        charts.polygon = new Chart(ctxPoly, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Polígono de Frecuencias',
+                    data: dataFi,
+                    fill: false,
+                    borderColor: '#ef4444',
+                    tension: 0.1
+                }]
+            },
+            options: commonOptions
+        });
+
+        // 3. Ojiva (Line Chart Acumulada)
+        const ctxOgive = document.getElementById('ogiveChart').getContext('2d');
+        charts.ogive = new Chart(ctxOgive, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Frecuencia Acumulada (Fi)',
+                    data: dataFiAccum,
+                    fill: true,
+                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                    borderColor: '#10b981',
+                    tension: 0.1
+                }]
+            },
+            options: commonOptions
+        });
+
+        // 4. Diagrama de Pareto (Combinado)
+        // Necesitamos ordenar por frecuencia descendente
+        const paretoData = labels.map((lbl, i) => ({ label: lbl, value: dataFi[i] }));
+        paretoData.sort((a, b) => b.value - a.value);
+        
+        const sortedLabels = paretoData.map(d => d.label);
+        const sortedValues = paretoData.map(d => d.value);
+        
+        let cumulative = 0;
+        const cumulativePerc = sortedValues.map(v => {
+            cumulative += v;
+            return (cumulative / totalN) * 100;
+        });
+
+        const ctxPareto = document.getElementById('paretoChart').getContext('2d');
+        charts.pareto = new Chart(ctxPareto, {
+            type: 'bar',
+            data: {
+                labels: sortedLabels,
+                datasets: [
+                    {
+                        label: 'Frecuencia',
+                        data: sortedValues,
+                        backgroundColor: 'rgba(37, 99, 235, 0.6)',
+                        yAxisID: 'y',
+                        order: 2
+                    },
+                    {
+                        label: '% Acumulado',
+                        data: cumulativePerc,
+                        type: 'line',
+                        borderColor: '#f59e0b',
+                        yAxisID: 'y1',
+                        order: 1
+                    }
+                ]
+            },
+            options: {
+                ...commonOptions,
+                scales: {
+                    y: { type: 'linear', display: true, position: 'left' },
+                    y1: { type: 'linear', display: true, position: 'right', max: 100, grid: { drawOnChartArea: false } }
+                }
+            }
+        });
+    }
+
+    // --- OPERACIONES DE CONJUNTOS ---
+    function getSet(id) {
+        return new Set(document.getElementById(id).value.split(/[\s,]+/).filter(v => v !== '').map(s => s.trim()));
+    }
+
+    function calcSetOp(op) {
+        const A = getSet('setA');
+        const B = getSet('setB');
+        let res = new Set();
+        let name = "";
+
+        if (op === 'union') {
+            res = new Set([...A, ...B]);
+            name = "A ∪ B";
+        } else if (op === 'intersection') {
+            res = new Set([...A].filter(x => B.has(x)));
+            name = "A ∩ B";
+        } else if (op === 'difference') {
+            res = new Set([...A].filter(x => !B.has(x)));
+            name = "A - B";
+        }
+
+        const resArray = Array.from(res).sort();
+        document.getElementById('setResult').innerText = `${name} = { ${resArray.join(', ')} }`;
+    }
+
+    // --- CONTEO Y PROBABILIDAD ---
+    function calcPermutation() {
+        const n = parseInt(document.getElementById('countN').value);
+        const r = parseInt(document.getElementById('countR').value);
+        if (isNaN(n) || isNaN(r) || r > n) {
+            document.getElementById('countResult').innerText = "Error: Verifique n >= r >= 0";
+            return;
+        }
+        const res = factorial(n) / factorial(n - r);
+        document.getElementById('countResult').innerText = `nPr (${n}, ${r}) = ${res}`;
+    }
+
+    function calcCombination() {
+        const n = parseInt(document.getElementById('countN').value);
+        const r = parseInt(document.getElementById('countR').value);
+        if (isNaN(n) || isNaN(r) || r > n) {
+            document.getElementById('countResult').innerText = "Error: Verifique n >= r >= 0";
+            return;
+        }
+        const res = factorial(n) / (factorial(r) * factorial(n - r));
+        document.getElementById('countResult').innerText = `nCr (${n}, ${r}) = ${res}`;
+    }
+
+    function calcSimpleProb() {
+        const fav = parseFloat(document.getElementById('probFav').value);
+        const total = parseFloat(document.getElementById('probTotal').value);
+        if (total <= 0) {
+            document.getElementById('probResult').innerText = "El total debe ser > 0";
+            return;
+        }
+        const p = fav / total;
+        document.getElementById('probResult').innerText = `P(E) = ${fav}/${total} = ${p.toFixed(4)} (${(p*100).toFixed(2)}%)`;
+    }
+
+    // --- DIAGRAMA DE ÁRBOL (VISUALIZACIÓN BÁSICA) ---
+    function generateTree() {
+        const canvas = document.getElementById('treeCanvas');
+        const ctx = canvas.getContext('2d');
+        const levels = parseInt(document.getElementById('treeLevels').value);
+        const optionsPerLevel = parseInt(document.getElementById('treeOptions').value);
+        
+        // Limpiar canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.font = "12px Arial";
+        ctx.fillStyle = "#1f2937";
+        ctx.strokeStyle = "#9ca3af";
+
+        if (levels < 1 || optionsPerLevel < 1) return;
+
+        const startX = 50;
+        const startY = canvas.height / 2;
+        const levelWidth = (canvas.width - 100) / levels;
+        
+        // Función recursiva para dibujar ramas
+        function drawBranch(x, y, level, heightScope) {
+            if (level === levels) return;
+
+            const nextX = x + levelWidth;
+            const subBranchHeight = heightScope / optionsPerLevel;
+
+            for (let i = 0; i < optionsPerLevel; i++) {
+                // Calcular posición Y de la siguiente nodo
+                // Distribuir equitativamente en el espacio disponible
+                const nextY = y - (heightScope / 2) + (subBranchHeight * i) + (subBranchHeight / 2);
+
+                // Dibujar línea
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(nextX, nextY);
+                ctx.stroke();
+
+                // Dibujar nodo (círculo)
+                ctx.beginPath();
+                ctx.arc(nextX, nextY, 4, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Etiqueta simple
+                ctx.fillText(`Op${i+1}`, nextX + 5, nextY - 5);
+
+                // Recursión
+                drawBranch(nextX, nextY, level + 1, subBranchHeight);
+            }
+        }
+
+        // Nodo raíz
+        ctx.beginPath();
+        ctx.arc(startX, startY, 5, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillText("Inicio", startX - 30, startY - 10);
+
+        // Iniciar recursión
+        drawBranch(startX, startY, 0, canvas.height - 50);
+    }
+    
+    // Iniciar con un ejemplo básico
+    generateTree();
+
+</script>
+</body>
+</html>
