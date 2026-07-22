@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Property } from "@/types/property";
 import { Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 interface PropertyTableRowProps {
   property: Property;
 }
 
 export function PropertyTableRow({ property }: PropertyTableRowProps) {
+  const { t } = useLanguage();
   const status = property.status?.toLowerCase() || 'active';
   
   const statusColors: Record<string, string> = {
@@ -22,7 +24,14 @@ export function PropertyTableRow({ property }: PropertyTableRowProps) {
     'for rent': "bg-purple-100 text-purple-800 hover:bg-purple-200",
   };
 
+  const statusLabels: Record<string, string> = {
+    active: t("admin.activeBadge"),
+    'for sale': t("admin.forSaleBadge"),
+    'for rent': t("admin.forRentBadge"),
+  };
+
   const statusColor = statusColors[status] || "bg-slate-100 text-slate-800";
+  const displayStatus = statusLabels[status] || (status.charAt(0).toUpperCase() + status.slice(1));
 
   const handleDelete = () => {
     if (confirm("Are you sure you want to delete this property?")) {
@@ -48,7 +57,7 @@ export function PropertyTableRow({ property }: PropertyTableRowProps) {
       <TableCell>${property.price.toLocaleString('en-US')}</TableCell>
       <TableCell>
         <Badge className={statusColor}>
-          {status.charAt(0).toUpperCase() + status.slice(1)}
+          {displayStatus}
         </Badge>
       </TableCell>
       <TableCell className="text-right">

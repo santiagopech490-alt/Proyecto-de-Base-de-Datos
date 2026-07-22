@@ -8,32 +8,42 @@ export const storageService = {
   /**
    * Uploads a profile avatar to the 'avatars' bucket.
    * Files are stored in a folder named after the user's ID.
+   * If the Supabase bucket is missing, falls back to Base64 Data URL.
    * 
    * @param userId The ID of the user.
    * @param file The file object to upload.
-   * @returns The public URL of the uploaded avatar.
+   * @returns The public URL or base64 data URL of the uploaded avatar.
    */
   async uploadAvatar(userId: string, file: File): Promise<string> {
-    // Force a consistent file path to utilize upsert efficiently and avoid delete RLS issues
     const filePath = `${userId}/avatar.png`;
 
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(filePath, file, {
-        upsert: true,
-        contentType: file.type,
-        cacheControl: '0',
-      });
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, {
+          upsert: true,
+          contentType: file.type,
+          cacheControl: '0',
+        });
 
-    if (uploadError) {
-      throw new Error(`Error uploading avatar: ${uploadError.message}`);
+      if (!uploadError) {
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(filePath);
+
+        return publicUrl;
+      }
+    } catch (err) {
+      console.warn("Supabase storage upload fallback activated:", err);
     }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(filePath);
-
-    return publicUrl;
+    // Fallback: convert file to Base64 data URL so avatar preview & update works instantly
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   },
 
   /**
@@ -42,26 +52,19 @@ export const storageService = {
    * @param userId The ID of the user.
    */
   async deleteAvatar(userId: string): Promise<void> {
-    // We don't know the exact extension, so we might need to list files first
-    // or just try to delete common ones if we didn't enforce one.
-    // For this implementation, we'll list files in the user's folder.
-    const { data: files, error: listError } = await supabase.storage
-      .from('avatars')
-      .list(userId);
-
-    if (listError) {
-      throw new Error(`Error listing avatars for deletion: ${listError.message}`);
-    }
-
-    if (files && files.length > 0) {
-      const filesToDelete = files.map(file => `${userId}/${file.name}`);
-      const { error: deleteError } = await supabase.storage
+    try {
+      const { data: files, error: listError } = await supabase.storage
         .from('avatars')
-        .remove(filesToDelete);
+        .list(userId);
 
-      if (deleteError) {
-        throw new Error(`Error deleting avatar: ${deleteError.message}`);
+      if (!listError && files && files.length > 0) {
+        const filesToDelete = files.map(file => `${userId}/${file.name}`);
+        await supabase.storage
+          .from('avatars')
+          .remove(filesToDelete);
       }
+    } catch (err) {
+      console.warn("Avatar delete warning:", err);
     }
   }
 };

@@ -1,5 +1,8 @@
+'use client';
+
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 interface DashboardTabsProps {
   children: {
@@ -9,29 +12,29 @@ interface DashboardTabsProps {
   };
 }
 
-// Keeping the interface for now to avoid breaking changes, but disabling the specific rule
-// eslint-disable-next-line react/no-children-prop
 const DashboardTabs: React.FC<DashboardTabsProps> = ({ children }) => {
+  const { t } = useLanguage();
+
   return (
     <Tabs defaultValue="saved" className="w-full">
       <TabsList className="bg-transparent border-b border-slate-200 w-full justify-start rounded-none h-auto p-0 mb-8 gap-8">
         <TabsTrigger 
           value="saved" 
-          className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 pb-4 text-slate-500 font-semibold transition-all hover:text-slate-700"
+          className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 pb-4 text-slate-500 font-semibold transition-all hover:text-slate-700 cursor-pointer"
         >
-          Saved Properties
+          {t("profile.savedProperties")}
         </TabsTrigger>
         <TabsTrigger 
           value="visits" 
-          className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 pb-4 text-slate-500 font-semibold transition-all hover:text-slate-700"
+          className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 pb-4 text-slate-500 font-semibold transition-all hover:text-slate-700 cursor-pointer"
         >
-          Scheduled Visits
+          {t("profile.scheduledVisits")}
         </TabsTrigger>
         <TabsTrigger 
           value="settings" 
-          className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 pb-4 text-slate-500 font-semibold transition-all hover:text-slate-700"
+          className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 pb-4 text-slate-500 font-semibold transition-all hover:text-slate-700 cursor-pointer"
         >
-          Preferences & Settings
+          {t("profile.preferencesSettings")}
         </TabsTrigger>
       </TabsList>
       

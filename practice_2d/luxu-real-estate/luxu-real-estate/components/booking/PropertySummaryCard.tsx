@@ -1,8 +1,11 @@
+'use client';
+
 import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 interface Property {
   id: string;
@@ -22,8 +25,10 @@ interface PropertySummaryCardProps {
 }
 
 export function PropertySummaryCard({ property, agentName }: PropertySummaryCardProps) {
+  const { t } = useLanguage();
+
   return (
-    <Card className="rounded-xl overflow-hidden shadow-sm border-border/10">
+    <Card className="rounded-xl overflow-hidden shadow-sm border-border/10 bg-white">
       <div className="relative aspect-square">
         <Image
           src={property.images[0]}
@@ -38,18 +43,18 @@ export function PropertySummaryCard({ property, agentName }: PropertySummaryCard
         <p className="text-nordic/70 mb-4">{property.address}</p>
         
         <div className="flex gap-4 mb-6">
-          <Badge variant="secondary">{property.listing_status}</Badge>
+          <Badge variant="secondary">{property.listing_status || t("details.forSale")}</Badge>
         </div>
 
         <div className="grid grid-cols-3 gap-4 mb-6 text-sm text-nordic/60">
           <div>
-            <p className="font-bold text-nordic">{property.bedrooms} Beds</p>
+            <p className="font-bold text-nordic">{property.bedrooms} {t("schedulePage.beds")}</p>
           </div>
           <div>
-            <p className="font-bold text-nordic">{property.bathrooms} Baths</p>
+            <p className="font-bold text-nordic">{property.bathrooms} {t("schedulePage.baths")}</p>
           </div>
           <div>
-            <p className="font-bold text-nordic">{property.sqft.toLocaleString()} sqft</p>
+            <p className="font-bold text-nordic">{property.sqft.toLocaleString()} {t("schedulePage.sqft")}</p>
           </div>
         </div>
 
@@ -60,11 +65,11 @@ export function PropertySummaryCard({ property, agentName }: PropertySummaryCard
               <AvatarFallback>{agentName[0]}</AvatarFallback>
             </Avatar>
             <div>
-              <p className="text-xs text-nordic/60">Hosted by</p>
+              <p className="text-xs text-nordic/60">{t("schedulePage.hostedBy")}</p>
               <p className="font-bold text-nordic">{agentName}</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" className="cursor-pointer">
             <span className="material-icons">chat_bubble_outline</span>
           </Button>
         </div>

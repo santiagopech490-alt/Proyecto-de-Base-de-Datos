@@ -1,6 +1,9 @@
+'use client';
+
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Bed, Bath, Square, Car } from "lucide-react";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 interface PropertyHeaderProps {
   title: string;
@@ -35,11 +38,13 @@ interface KeyFeaturesProps {
 }
 
 export function KeyFeaturesRow({ beds, baths, sqft, garage }: KeyFeaturesProps) {
+  const { t } = useLanguage();
+
   const features = [
-    { icon: Bed, label: `${beds || 0} Bedrooms` },
-    { icon: Bath, label: `${baths || 0} Bathrooms` },
-    { icon: Square, label: `${(sqft || 0).toLocaleString()} Sq.Ft.` },
-    { icon: Car, label: `${garage || 0} Car Garage` },
+    { icon: Bed, val: beds || 0, label: t("details.bedrooms") },
+    { icon: Bath, val: baths || 0, label: t("details.bathrooms") },
+    { icon: Square, val: (sqft || 0).toLocaleString(), label: t("details.sqft") },
+    { icon: Car, val: garage || 0, label: t("details.garage") },
   ];
 
   return (
@@ -50,9 +55,9 @@ export function KeyFeaturesRow({ beds, baths, sqft, garage }: KeyFeaturesProps) 
             <f.icon className="w-6 h-6 text-slate-400 group-hover:text-emerald-700 transition-colors duration-300" />
           </div>
           <div className="flex flex-col">
-            <span className="text-xl font-bold text-slate-900">{f.label.split(' ')[0]}</span>
+            <span className="text-xl font-bold text-slate-900">{f.val}</span>
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              {f.label.split(' ').slice(1).join(' ')}
+              {f.label}
             </span>
           </div>
         </div>

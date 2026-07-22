@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 interface AboutHomeProps {
   description: string;
 }
 
 export function AboutHome({ description }: AboutHomeProps) {
+  const { t } = useLanguage();
   const [isExpanded, setIsExpanded] = useState(false);
   const maxLength = 400;
 
@@ -18,7 +20,7 @@ export function AboutHome({ description }: AboutHomeProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">About this Home</h2>
+        <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">{t("details.aboutProperty")}</h2>
       </div>
       
       <div className="relative">
@@ -34,12 +36,12 @@ export function AboutHome({ description }: AboutHomeProps) {
         <Button 
           variant="ghost" 
           onClick={() => setIsExpanded(!isExpanded)} 
-          className="group flex items-center gap-2 px-0 h-auto font-bold text-emerald-800 hover:text-emerald-900 hover:bg-transparent transition-all duration-300"
+          className="group flex items-center gap-2 px-0 h-auto font-bold text-emerald-800 hover:text-emerald-900 hover:bg-transparent transition-all duration-300 cursor-pointer"
         >
           {isExpanded ? (
-            <>Read Less <ChevronUp className="w-4 h-4 group-hover:-translate-y-1 transition-transform" /></>
+            <>Ver Menos <ChevronUp className="w-4 h-4 group-hover:-translate-y-1 transition-transform" /></>
           ) : (
-            <>Read More <ChevronDown className="w-4 h-4 group-hover:translate-y-1 transition-transform" /></>
+            <>Leer Más <ChevronDown className="w-4 h-4 group-hover:translate-y-1 transition-transform" /></>
           )}
         </Button>
       )}

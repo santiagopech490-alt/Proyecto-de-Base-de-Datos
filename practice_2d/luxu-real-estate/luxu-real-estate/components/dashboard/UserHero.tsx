@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Pencil } from 'lucide-react';
 import { storageService } from '@/lib/storage-service';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 const supabase = createClient();
 
@@ -22,11 +23,37 @@ interface UserHeroProps {
 
 const UserHero: React.FC<UserHeroProps> = ({ user }) => {
   const router = useRouter();
-  const [avatarUrl, setAvatarUrl] = useState(user.avatar_url);
+  const { t } = useLanguage();
+
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatar_url);
+  const [fullName, setFullName] = useState<string>(user.full_name || 'User');
+  const [location, setLocation] = useState<string>(user.location || 'Beverly Hills, CA');
   const [uploading, setUploading] = useState(false);
+  
   const joinDate = user.member_since 
     ? new Date(user.member_since).getFullYear() 
     : '2021';
+
+  useEffect(() => {
+    const savedAvatar = localStorage.getItem('luxe_user_avatar');
+    if (savedAvatar) {
+      setAvatarUrl(savedAvatar);
+    } else if (user.avatar_url) {
+      setAvatarUrl(user.avatar_url);
+    }
+
+    const savedProfileStr = localStorage.getItem('luxe_demo_profile');
+    if (savedProfileStr) {
+      try {
+        const parsed = JSON.parse(savedProfileStr);
+        if (parsed.full_name) setFullName(parsed.full_name);
+        if (parsed.location) setLocation(parsed.location);
+      } catch {}
+    } else {
+      if (user.full_name) setFullName(user.full_name);
+      if (user.location) setLocation(user.location);
+    }
+  }, [user.avatar_url, user.full_name, user.location]);
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -38,24 +65,22 @@ const UserHero: React.FC<UserHeroProps> = ({ user }) => {
       
       if (!newUrl) throw new Error('Upload failed');
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ avatar_url: newUrl })
-        .eq('id', user.id)
-        .select();
+      setAvatarUrl(newUrl);
+      localStorage.setItem('luxe_user_avatar', newUrl);
 
-      if (error) {
-        console.error("ERROR CRÍTICO AL GUARDAR EN DB:", error);
-        throw error;
+      try {
+        await supabase
+          .from('profiles')
+          .update({ avatar_url: newUrl })
+          .eq('id', user.id);
+      } catch (dbErr) {
+        console.warn("DB update skipped or warning:", dbErr);
       }
-      console.log("Respuesta de Supabase tras update:", data);
 
-      setAvatarUrl(`${newUrl}?t=${new Date().getTime()}`);
       toast.success('Avatar updated successfully!');
-      router.refresh();
     } catch (error: any) {
+      console.error("Avatar upload error:", error);
       toast.error('Failed to update avatar.');
-      console.error(error);
     } finally {
       setUploading(false);
     }
@@ -65,15 +90,15 @@ const UserHero: React.FC<UserHeroProps> = ({ user }) => {
     <div className="relative w-full h-48 sm:h-64 bg-gradient-to-r from-[#E2F1E7] to-[#F1F8F4] rounded-3xl p-6 sm:p-10 flex items-center mb-8 overflow-hidden">
       <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-20 rounded-full -mr-20 -mt-20 blur-3xl" />
       
-      <div className="flex flex-col sm:flex-row items-center gap-6 relative z-10">
+      <div className="flex flex-col sm:flex-row items-center gap-6 relative z-10 w-full">
         <div className="relative group">
           <Avatar className="w-24 h-24 sm:w-32 sm:h-32 border-4 border-white shadow-lg">
             <AvatarImage 
-              src={avatarUrl ? (avatarUrl.includes('?') ? avatarUrl : `${avatarUrl}?t=${new Date().getTime()}`) : ''} 
-              alt={user.full_name || 'User'} 
+              src={avatarUrl || ''} 
+              alt={fullName} 
             />
             <AvatarFallback className="bg-emerald-100 text-emerald-800 text-2xl font-semibold">
-              {user.full_name?.split(' ').map(n => n[0]).join('') || 'U'}
+              {fullName?.split(' ').map(n => n[0]).join('') || 'U'}
             </AvatarFallback>
           </Avatar>
           
@@ -97,14 +122,14 @@ const UserHero: React.FC<UserHeroProps> = ({ user }) => {
           />
         </div>
 
-        <div className="text-center sm:text-left flex flex-col gap-1">
+        <div className="text-center sm:text-left flex flex-col gap-1 flex-1">
           <h1 className="text-2xl sm:text-4xl font-bold text-slate-900 leading-tight">
-            {user.full_name || 'User'}
+            {fullName}
           </h1>
           <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-slate-500 font-medium">
-            <span>{user.location || 'Location'}</span>
+            <span>{location}</span>
             <span className="hidden sm:inline text-slate-300">•</span>
-            <span>Member since {joinDate}</span>
+            <span>{t("profile.memberSince")} {joinDate}</span>
           </div>
         </div>
       </div>

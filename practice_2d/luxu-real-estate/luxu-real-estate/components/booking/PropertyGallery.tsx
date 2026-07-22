@@ -4,14 +4,16 @@ import { useState, useCallback, useEffect } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Maximize2, Camera, Heart, Share2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Camera, Heart, Share2 } from "lucide-react";
 import Image from "next/image";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 interface PropertyGalleryProps {
   images: string[];
 }
 
 export function PropertyGallery({ images }: PropertyGalleryProps) {
+  const { t } = useLanguage();
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -57,18 +59,18 @@ export function PropertyGallery({ images }: PropertyGalleryProps) {
         {/* Floating Badges & Actions */}
         <div className="absolute top-6 left-6 flex gap-2">
           <div className="bg-emerald-600 text-white px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest shadow-lg shadow-emerald-900/20">
-            For Sale
+            {t("details.forSale")}
           </div>
           <div className="bg-white/90 backdrop-blur-md text-slate-900 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest shadow-lg border border-white/20">
-            New Listing
+            {t("details.newListing")}
           </div>
         </div>
 
         <div className="absolute top-6 right-6 flex gap-2">
-          <Button size="icon" variant="secondary" className="rounded-full bg-white/90 backdrop-blur-md hover:bg-white shadow-lg border border-white/20 transition-all duration-300">
+          <Button size="icon" variant="secondary" className="rounded-full bg-white/90 backdrop-blur-md hover:bg-white shadow-lg border border-white/20 transition-all duration-300 cursor-pointer">
             <Heart className="w-5 h-5 text-slate-700" />
           </Button>
-          <Button size="icon" variant="secondary" className="rounded-full bg-white/90 backdrop-blur-md hover:bg-white shadow-lg border border-white/20 transition-all duration-300">
+          <Button size="icon" variant="secondary" className="rounded-full bg-white/90 backdrop-blur-md hover:bg-white shadow-lg border border-white/20 transition-all duration-300 cursor-pointer">
             <Share2 className="w-5 h-5 text-slate-700" />
           </Button>
         </div>
@@ -78,7 +80,7 @@ export function PropertyGallery({ images }: PropertyGalleryProps) {
           <Button 
             variant="outline" 
             size="icon"
-            className="w-12 h-12 rounded-full bg-white/90 backdrop-blur-md border-white/20 shadow-xl pointer-events-auto hover:scale-110 active:scale-95 transition-all" 
+            className="w-12 h-12 rounded-full bg-white/90 backdrop-blur-md border-white/20 shadow-xl pointer-events-auto hover:scale-110 active:scale-95 transition-all cursor-pointer" 
             onClick={scrollPrev}
           >
             <ChevronLeft className="w-6 h-6 text-slate-900" />
@@ -86,7 +88,7 @@ export function PropertyGallery({ images }: PropertyGalleryProps) {
           <Button 
             variant="outline" 
             size="icon"
-            className="w-12 h-12 rounded-full bg-white/90 backdrop-blur-md border-white/20 shadow-xl pointer-events-auto hover:scale-110 active:scale-95 transition-all" 
+            className="w-12 h-12 rounded-full bg-white/90 backdrop-blur-md border-white/20 shadow-xl pointer-events-auto hover:scale-110 active:scale-95 transition-all cursor-pointer" 
             onClick={scrollNext}
           >
             <ChevronRight className="w-6 h-6 text-slate-900" />
@@ -95,10 +97,10 @@ export function PropertyGallery({ images }: PropertyGalleryProps) {
 
         {/* View All Button */}
         <div className="absolute bottom-6 right-6">
-          <Button className="bg-slate-900/80 backdrop-blur-md text-white border border-white/10 rounded-xl px-4 py-6 hover:bg-slate-900 transition-all flex gap-2 shadow-2xl">
+          <Button className="bg-slate-900/80 backdrop-blur-md text-white border border-white/10 rounded-xl px-4 py-6 hover:bg-slate-900 transition-all flex gap-2 shadow-2xl cursor-pointer">
             <Camera className="w-5 h-5" />
-            <span className="font-bold">View All Photos</span>
-            <span className="text-slate-400 font-medium ml-1">1/{images.length}</span>
+            <span className="font-bold">{t("details.viewAllPhotos")}</span>
+            <span className="text-slate-400 font-medium ml-1">{selectedIndex + 1}/{images.length}</span>
           </Button>
         </div>
       </div>
@@ -109,7 +111,7 @@ export function PropertyGallery({ images }: PropertyGalleryProps) {
           <button
             key={index}
             onClick={() => scrollTo(index)}
-            className={`relative flex-[0_0_120px] h-20 rounded-xl overflow-hidden border-2 transition-all duration-300 ${
+            className={`relative flex-[0_0_120px] h-20 rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer ${
               selectedIndex === index ? "border-emerald-600 scale-105 shadow-lg shadow-emerald-900/10" : "border-transparent opacity-60 hover:opacity-100"
             }`}
           >

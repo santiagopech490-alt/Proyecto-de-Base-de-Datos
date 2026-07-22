@@ -7,7 +7,7 @@ import { AmenitiesGrid } from '@/components/booking/AmenitiesGrid';
 import { AgentSidebar } from '@/components/booking/AgentSidebar';
 import { LocationWidget } from '@/components/booking/LocationWidget';
 import { MortgageCalculatorWidget } from '@/components/booking/MortgageCalculatorWidget';
-import Link from 'next/link';
+import { ScheduleButton } from '@/components/booking/ScheduleButton';
 import { createClient } from '@/lib/supabase/server';
 import { LoginRequired } from '@/components/LoginRequired';
 
@@ -31,10 +31,9 @@ export default async function PropertyPage({
   return (
     <div className="min-h-screen bg-soft-fog">
       <div className="container mx-auto py-8 px-4">
-        {/* Updated grid layout for 1-column mobile and 2-column desktop */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Main Content Area */}
-          <div className="lg:col-span-1 space-y-8"> {/* Changed from md:col-span-2 to lg:col-span-1 */}
+          <div className="lg:col-span-1 space-y-8">
             {(property.images || []).length > 0 && <PropertyGallery images={property.images} />}
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
               <PropertyHeader 
@@ -42,14 +41,8 @@ export default async function PropertyPage({
                 price={property.price} 
                 location={property.location} 
               />
-              {/* Add the "Schedule Viewing" button here */}
               <div className="mt-6">
-                <Link 
-                  href={`/properties/${slug}/schedule`} 
-                  className="inline-block px-6 py-3 bg-emerald-600 text-white font-semibold rounded-lg shadow-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-opacity-50 transition duration-150 ease-in-out"
-                >
-                  Schedule Viewing
-                </Link>
+                <ScheduleButton slug={slug} />
               </div>
             </div>
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
@@ -69,9 +62,9 @@ export default async function PropertyPage({
           </div>
 
           {/* Sticky Sidebar */}
-          <div className="lg:col-span-1"> {/* Changed from md:col-span-1 to lg:col-span-1 */}
+          <div className="lg:col-span-1">
             <div className="sticky top-24 space-y-6">
-              <AgentSidebar />
+              <AgentSidebar slug={slug} />
               <LocationWidget />
               <MortgageCalculatorWidget />
             </div>

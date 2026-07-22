@@ -1,5 +1,8 @@
+'use client';
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building, CheckCircle, Clock } from "lucide-react";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 interface PropertyKPIsProps {
   total: number;
@@ -8,10 +11,12 @@ interface PropertyKPIsProps {
 }
 
 export function PropertyKPIs({ total, active, pending }: PropertyKPIsProps) {
+  const { t } = useLanguage();
+
   const kpis = [
-    { title: "Total Listings", value: total, icon: Building },
-    { title: "Active Properties", value: active, icon: CheckCircle },
-    { title: "Pending Sale", value: pending, icon: Clock },
+    { title: t("admin.totalListings"), value: total, icon: Building },
+    { title: t("admin.activeProperties"), value: active, icon: CheckCircle },
+    { title: t("admin.pendingSale"), value: pending, icon: Clock },
   ];
 
   return (

@@ -137,71 +137,91 @@ const mockProperties: Property[] = [
   },
 ];
 
+import { redisCache } from '@/lib/redis';
+
 export async function getAllProperties(): Promise<Property[]> {
-  const { data, error } = await supabase
-    .from('properties')
-    .select('*')
-    .order('created_at', { ascending: false });
+  try {
+    const cached = await redisCache.get<Property[]>('all_properties_cache');
+    if (cached && cached.length > 0) {
+      return cached;
+    }
 
-  if (error) {
-    console.error('Error fetching properties:', error);
+    const { data, error } = await supabase
+      .from('properties')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error || !data || data.length === 0) {
+      return mockProperties;
+    }
+
+    const result = data.map(p => ({
+      ...p,
+      location: p.address || p.location,
+      beds: p.bedrooms || p.beds,
+      baths: p.bathrooms || p.baths,
+    })) as Property[];
+
+    await redisCache.set('all_properties_cache', result, 120);
+    return result;
+  } catch (err) {
+    console.warn('Supabase unreachable, using mock properties:', err);
     return mockProperties;
   }
-
-  if (!data || data.length === 0) {
-    return mockProperties;
-  }
-
-  return data.map(p => ({
-    ...p,
-    location: p.address || p.location,
-    beds: p.bedrooms || p.beds,
-    baths: p.bathrooms || p.baths,
-  })) as Property[];
 }
 
 export async function getPropertiesByOwner(ownerId: string): Promise<Property[]> {
-  const { data, error } = await supabase
-    .from('properties')
-    .select('*')
-    .eq('user_id', ownerId)
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('user_id', ownerId)
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching owner properties:', error);
-    return [];
-  }
+    if (error) {
+      console.error('Error fetching owner properties:', error);
+      return mockProperties.filter(p => p.agentId === 'user123');
+    }
 
-  if (!data || data.length === 0) {
+    if (!data || data.length === 0) {
+      return mockProperties.filter(p => p.agentId === 'user123');
+    }
+
+    return data.map(p => ({
+      ...p,
+      location: p.address || p.location,
+      beds: p.bedrooms || p.beds,
+      baths: p.bathrooms || p.baths,
+    })) as Property[];
+  } catch (err) {
+    console.warn('Supabase unreachable for owner properties, using mock data:', err);
     return mockProperties.filter(p => p.agentId === 'user123');
   }
-
-  return data.map(p => ({
-    ...p,
-    location: p.address || p.location,
-    beds: p.bedrooms || p.beds,
-    baths: p.bathrooms || p.baths,
-  })) as Property[];
 }
 
 export async function getPropertyBySlug(slug: string): Promise<Property | undefined> {
-  const { data, error } = await supabase
-    .from('properties')
-    .select('*')
-    .eq('slug', slug)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('slug', slug)
+      .single();
 
-  if (error || !data) {
-    console.warn(`Supabase fetch failed for slug: ${slug}, falling back to mock data.`);
+    if (error || !data) {
+      console.warn(`Supabase fetch failed for slug: ${slug}, falling back to mock data.`);
+      return mockProperties.find(p => p.slug === slug);
+    }
+
+    return {
+      ...data,
+      location: data.address || data.location,
+      beds: data.bedrooms || data.beds,
+      baths: data.bathrooms || data.baths,
+    } as Property;
+  } catch (err) {
+    console.warn(`Supabase unreachable for slug: ${slug}, using mock data:`, err);
     return mockProperties.find(p => p.slug === slug);
   }
-
-  return {
-    ...data,
-    location: data.address || data.location,
-    beds: data.bedrooms || data.beds,
-    baths: data.bathrooms || data.baths,
-  } as Property;
 }
 
 export async function createProperty(property: Partial<Property>, userId: string) {

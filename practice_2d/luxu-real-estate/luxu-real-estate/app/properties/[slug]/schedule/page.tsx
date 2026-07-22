@@ -10,9 +10,11 @@ import { BookingScheduler } from '@/components/booking/BookingScheduler';
 import { BookingSuccessModal } from '@/components/booking/BookingSuccessModal';
 import { Availability, Property } from '@/types/booking';
 import { LoginRequired } from '@/components/LoginRequired';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 export default function SchedulePage() {
   const params = useParams<{ slug: string }>();
+  const { t } = useLanguage();
   const [propertyDetails, setPropertyDetails] = useState<Property | null>(null);
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [user, setUser] = useState<any>(null);
@@ -31,21 +33,18 @@ export default function SchedulePage() {
           throw new Error('Invalid property identifier.');
         }
 
-        // --- Fetch User ---
         const { data: { user: fetchedUser } } = await supabase.auth.getUser();
         setUser(fetchedUser);
         setCheckingAuth(false);
 
         if (!fetchedUser) return;
 
-        // --- Fetch Property Details ---
         const fetchedProperty = await getPropertyBySlug(params.slug);
         if (!fetchedProperty) {
           throw new Error('Property not found.');
         }
         setPropertyDetails(fetchedProperty);
 
-        // --- Fetch Availability ---
         const fetchedAvailability = await getAvailability(fetchedProperty.id, new Date().toISOString().split('T')[0]);
         setAvailability(fetchedAvailability);
 
@@ -111,18 +110,18 @@ export default function SchedulePage() {
       <div className="max-w-6xl mx-auto">
         <button
           onClick={() => window.history.back()}
-          className="flex items-center text-mosque mb-8 hover:underline"
+          className="flex items-center text-[#006655] mb-8 hover:underline cursor-pointer"
         >
           <span className="material-icons mr-2">arrow_back</span>
-          Back to property details
+          {t("schedulePage.backToProperty")}
         </button>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <PropertySummaryCard property={propertyDetails} agentName="Sarah Jenkins" />
 
           <div className="bg-white p-8 rounded-xl shadow-sm border border-border/10">
-            <h1 className="text-3xl font-bold text-nordic mb-2">Schedule a Viewing</h1>
-            <p className="text-nordic/70 mb-8">Choose a date and time to tour the property in person.</p>
+            <h1 className="text-3xl font-bold text-nordic mb-2">{t("schedulePage.scheduleViewingTitle")}</h1>
+            <p className="text-nordic/70 mb-8">{t("schedulePage.scheduleViewingSubtitle")}</p>
             <BookingScheduler availability={availability} onBook={handleBook} />
           </div>
         </div>

@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Building2, Chrome, Github, Loader2, Mail, Lock } from 'lucide-react';
+import { Building2, Chrome, Github, Loader2, Mail, Lock, Sparkles } from 'lucide-react';
 import { signInWithGoogle, signInWithGithub } from '@/lib/services/auth';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -17,21 +18,9 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isGithubLoading, setIsGithubLoading] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const router = useRouter();
-  const supabase = createClient();
-
-  useEffect(() => {
-    async function checkUser() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        router.push('/properties');
-      } else {
-        setIsCheckingAuth(false);
-      }
-    }
-    checkUser();
-  }, [router, supabase]);
+  const supabase = useMemo(() => createClient(), []);
+  const { t } = useLanguage();
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,19 +42,56 @@ export default function LoginPage() {
           return;
         }
         if (error.message.includes('Invalid login credentials')) {
-          toast.error('Incorrect email or password. Please try again.');
+          toast.error('User not registered yet. Click "Sign up" or use "Demo Login".');
           return;
         }
         throw error;
       }
       
       if (data.user) {
+        document.cookie = "luxe_auth=true; path=/; max-age=86400";
         toast.success('Logged in successfully!');
-        router.push('/properties');
+        window.location.href = '/';
       }
     } catch (error: any) {
       console.error('Login error:', error);
       toast.error(error.message || 'Failed to sign in');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    try {
+      setIsLoading(true);
+      const demoEmail = 'demo.admin@gmail.com';
+      const demoPassword = 'Password123!';
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: demoEmail,
+        password: demoPassword,
+      });
+
+      document.cookie = "luxe_auth=true; path=/; max-age=86400";
+
+      if (!error && data?.user) {
+        localStorage.removeItem('luxe_demo_user');
+        toast.success('Logged in as Demo User via Supabase!');
+        window.location.href = '/profile';
+        return;
+      }
+
+      // Fallback: Save demo session in localStorage so demo access works instantly
+      const demoUser = {
+        user: { id: '00000000-0000-0000-0000-000000000001', email: demoEmail },
+        profile: { full_name: 'Demo Admin User', avatar_url: '' }
+      };
+      localStorage.setItem('luxe_demo_user', JSON.stringify(demoUser));
+      toast.success('Logged in as Demo User!');
+      window.location.href = '/profile';
+    } catch (err: any) {
+      console.error('Demo login error:', err);
+      toast.error(err.message || 'Demo login failed');
     } finally {
       setIsLoading(false);
     }
@@ -93,14 +119,6 @@ export default function LoginPage() {
     }
   };
 
-  if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F0F9F6] dark:bg-[#0d1f1b]">
-        <Loader2 className="size-10 text-[#0F5A4D] animate-spin" />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-from)_0%,_var(--tw-gradient-to)_100%)] from-[#F0F9F6] to-[#F7FCFA] dark:from-[#0d1f1b] dark:to-[#0f231f]">
       <div className="w-full max-w-md animate-in fade-in zoom-in duration-500">
@@ -116,20 +134,20 @@ export default function LoginPage() {
         <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-[24px] overflow-hidden">
           <CardHeader className="text-center pt-8 pb-4 space-y-1">
             <CardTitle className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-              Welcome back
+              {t("auth.welcomeBack")}
             </CardTitle>
             <CardDescription className="text-slate-500 dark:text-slate-400">
-              Login to your LuxeEstate account
+              {t("auth.loginSubtitle")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 px-8 pb-8">
             <form onSubmit={handleEmailLogin} className="space-y-4">
               <div className="space-y-2">
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400 pointer-events-none" />
                   <Input
                     type="email"
-                    placeholder="Email address"
+                    placeholder={t("auth.emailLabel")}
                     className="pl-10 h-12 rounded-xl border-[#E6E8EC] dark:border-slate-800 bg-white/50 dark:bg-slate-950/50 focus:ring-[#0F5A4D]"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -140,10 +158,10 @@ export default function LoginPage() {
               </div>
               <div className="space-y-2">
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400 pointer-events-none" />
                   <Input
                     type="password"
-                    placeholder="Password"
+                    placeholder={t("auth.passwordLabel")}
                     className="pl-10 h-12 rounded-xl border-[#E6E8EC] dark:border-slate-800 bg-white/50 dark:bg-slate-950/50 focus:ring-[#0F5A4D]"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -154,21 +172,32 @@ export default function LoginPage() {
               </div>
               <Button
                 type="submit"
-                className="w-full h-12 rounded-xl bg-[#0F5A4D] hover:bg-[#0a3d34] text-white font-semibold transition-all active:scale-[0.98] disabled:opacity-70"
+                className="w-full h-12 rounded-xl bg-[#0F5A4D] hover:bg-[#0a3d34] text-white font-semibold transition-all active:scale-[0.98] disabled:opacity-70 cursor-pointer"
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  'Sign In'
+                  t("auth.signInBtn")
                 )}
               </Button>
             </form>
 
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-[#0F5A4D] dark:text-emerald-300 font-semibold hover:bg-emerald-100 transition-all flex items-center justify-center gap-2 border border-emerald-200/50 dark:border-emerald-800/50 cursor-pointer"
+              onClick={handleDemoLogin}
+              disabled={isLoading}
+            >
+              <Sparkles className="size-4 text-emerald-600" />
+              {t("auth.demoLoginBtn")}
+            </Button>
+
             <div className="space-y-3 pt-2">
               <Button
                 variant="outline"
-                className="w-full h-12 rounded-xl border-[#E6E8EC] dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-200 font-medium transition-all active:scale-[0.98] disabled:opacity-70 group"
+                className="w-full h-12 rounded-xl border-[#E6E8EC] dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-200 font-medium transition-all active:scale-[0.98] disabled:opacity-70 group cursor-pointer"
                 onClick={handleGoogleLogin}
                 disabled={isGoogleLoading || isGithubLoading || isLoading}
               >
@@ -177,11 +206,11 @@ export default function LoginPage() {
                 ) : (
                   <Chrome className="mr-2 h-4 w-4 text-[#4285F4] transition-transform group-hover:scale-110" />
                 )}
-                Continue with Google
+                {t("auth.googleLogin")}
               </Button>
               <Button
                 variant="outline"
-                className="w-full h-12 rounded-xl border-[#E6E8EC] dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-200 font-medium transition-all active:scale-[0.98] disabled:opacity-70 group"
+                className="w-full h-12 rounded-xl border-[#E6E8EC] dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-200 font-medium transition-all active:scale-[0.98] disabled:opacity-70 group cursor-pointer"
                 onClick={handleGithubLogin}
                 disabled={isGoogleLoading || isGithubLoading || isLoading}
               >
@@ -190,7 +219,7 @@ export default function LoginPage() {
                 ) : (
                   <Github className="mr-2 h-4 w-4 text-slate-900 dark:text-white transition-transform group-hover:scale-110" />
                 )}
-                Continue with GitHub
+                {t("auth.githubLogin")}
               </Button>
             </div>
 
@@ -200,45 +229,32 @@ export default function LoginPage() {
               </div>
               <div className="relative flex justify-center text-xs uppercase">
                 <span className="bg-transparent px-2 text-slate-400 dark:text-slate-500 font-medium tracking-wider">
-                  Or join our community
+                  {t("auth.orJoin")}
                 </span>
               </div>
             </div>
 
             <div className="text-center space-y-4">
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Don't have an account?{' '}
+                {t("auth.noAccount")}{' '}
                 <Link
                   href="/auth/signup"
                   className="font-semibold text-[#0F5A4D] hover:text-[#0a3d34] transition-colors"
                 >
-                  Sign up
+                  {t("auth.signUpLink")}
                 </Link>
               </p>
-              
-              <div className="pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full border-[#E6E8EC] dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 text-xs font-medium"
-                  onClick={handleGoogleLogin}
-                  disabled={isGoogleLoading || isGithubLoading}
-                >
-                  <Chrome className="mr-2 h-3 w-3 text-[#4285F4]" />
-                  Sign up with Gmail
-                </Button>
-              </div>
             </div>
           </CardContent>
           <CardFooter className="bg-slate-50/50 dark:bg-slate-800/20 px-8 py-6 flex flex-wrap justify-center gap-x-6 gap-y-2 text-[11px] text-slate-400 dark:text-slate-500 font-medium uppercase tracking-widest border-t border-slate-100 dark:border-slate-800">
             <Link href="/privacy" className="hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
-              Privacy Policy
+              {t("auth.privacy")}
             </Link>
             <Link href="/terms" className="hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
-              Terms of Service
+              {t("auth.terms")}
             </Link>
             <Link href="/help" className="hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
-              Help Center
+              {t("auth.help")}
             </Link>
           </CardFooter>
         </Card>

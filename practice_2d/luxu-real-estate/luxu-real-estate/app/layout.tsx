@@ -18,6 +18,8 @@ export const metadata: Metadata = {
   description: "Find your sanctuary with LuxeEstate - The ultimate premium real estate platform.",
 };
 
+import { LanguageProvider } from "@/lib/i18n/LanguageContext";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -25,14 +27,16 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[#EEF6F6] dark:bg-[#0f231f]">
-        <Navbar />
-        <main className="flex-grow">
-          {children}
-        </main>
+        <LanguageProvider>
+          <Navbar />
+          <main className="flex-grow">
+            {children}
+          </main>
+        </LanguageProvider>
       </body>
     </html>
   );

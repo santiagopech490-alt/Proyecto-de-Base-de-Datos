@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search, Bell, Menu, Building2, User } from "lucide-react";
@@ -17,56 +17,85 @@ import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-const navLinks = [
-  { label: "Dashboard", href: "/admin/properties" },
-  { label: "Buy", href: "/properties" },
-  { label: "Rent", href: "#" },
-  { label: "Sell", href: "#" },
-  { label: "Saved Homes", href: "/favorites" },
-  { label: "Users", href: "/users" },
-];
+import { useLanguage } from "@/lib/i18n/LanguageContext";
+import { Globe } from "lucide-react";
 
 export function Navbar() {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const pathname = usePathname();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+  const { language, setLanguage, t } = useLanguage();
+
+  const navLinks = [
+    { label: t("nav.dashboard"), href: "/admin/properties" },
+    { label: t("nav.buy"), href: "/properties" },
+    { label: t("nav.rent"), href: "#" },
+    { label: t("nav.sell"), href: "#" },
+    { label: t("nav.savedHomes"), href: "/favorites" },
+    { label: t("nav.users"), href: "/users" },
+  ];
 
   useEffect(() => {
     async function fetchUserData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('avatar_url, full_name')
-          .eq('id', user.id)
-          .single();
-        setProfile(profile);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setUser(user);
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('avatar_url, full_name')
+            .eq('id', user.id)
+            .single();
+          setProfile(profile);
+          return;
+        }
+      } catch (err) {
+        console.warn("Supabase auth unavailable:", err);
+      }
+
+      // Check local demo user session
+      const demoStr = typeof window !== 'undefined' ? localStorage.getItem('luxe_demo_user') : null;
+      if (demoStr) {
+        try {
+          const demoObj = JSON.parse(demoStr);
+          setUser(demoObj.user);
+          setProfile(demoObj.profile);
+        } catch {}
       }
     }
     
     fetchUserData();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        // Delay to allow Supabase storage/database replication to catch up
-        setTimeout(async () => {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('avatar_url, full_name')
-            .eq('id', session.user.id)
-            .single();
-          setProfile(profile);
-        }, 800);
-      } else {
-        setProfile(null);
-      }
-    });
+    try {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        if (session?.user) {
+          setUser(session.user);
+          setTimeout(async () => {
+            try {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('avatar_url, full_name')
+                .eq('id', session.user.id)
+                .single();
+              setProfile(profile);
+            } catch (err) {
+              console.warn("Profile fetch error:", err);
+            }
+          }, 800);
+        } else {
+          const demoStr = typeof window !== 'undefined' ? localStorage.getItem('luxe_demo_user') : null;
+          if (!demoStr) {
+            setUser(null);
+            setProfile(null);
+          }
+        }
+      });
 
-    return () => subscription.unsubscribe();
+      return () => subscription?.unsubscribe();
+    } catch (err) {
+      console.warn("Auth listener subscription error:", err);
+    }
   }, [supabase]);
 
   return (
@@ -111,7 +140,16 @@ export function Navbar() {
           </div>
 
           {/* Actions */}
-          <div className="flex items-center space-x-4 sm:space-x-6">
+          <div className="flex items-center space-x-3 sm:space-x-4">
+            <button
+              onClick={() => setLanguage(language === 'es' ? 'en' : 'es')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-800 transition-all border border-slate-200 cursor-pointer shadow-xs"
+              title={language === 'es' ? 'Switch to English' : 'Cambiar a Español'}
+            >
+              <Globe className="w-3.5 h-3.5 text-[#006655]" />
+              <span>{language === 'es' ? '🇪🇸 ES' : '🇺🇸 EN'}</span>
+            </button>
+
             <Button variant="ghost" size="icon" className="text-[#19322F] hover:text-[#006655]">
               <Search className="w-5 h-5" />
             </Button>
@@ -125,35 +163,49 @@ export function Navbar() {
             <Separator orientation="vertical" className="h-8 hidden sm:block" />
 
             {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger className="flex items-center gap-2 pl-2 cursor-pointer hover:opacity-80 transition-opacity">
-                  <Avatar className="w-9 h-9 ring-2 ring-transparent hover:ring-[#006655] transition-all">
-                    {profile?.avatar_url ? (
+              <div className="flex items-center gap-3">
+                <Link href="/profile" className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
+                  <Avatar className="w-9 h-9 ring-2 ring-[#006655]/20 hover:ring-[#006655] transition-all">
+                    {(typeof window !== 'undefined' && localStorage.getItem('luxe_user_avatar')) || profile?.avatar_url ? (
                       <AvatarImage 
-                        src={(profile.avatar_url.startsWith('http') 
+                        src={(typeof window !== 'undefined' && localStorage.getItem('luxe_user_avatar')) || (profile.avatar_url.startsWith('http') || profile.avatar_url.startsWith('data:') 
                           ? profile.avatar_url 
-                          : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/${profile.avatar_url}`) + `?t=${new Date().getTime()}`} 
-                        alt={profile.full_name || 'User'}
+                          : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/${profile.avatar_url}`)} 
+                        alt={profile?.full_name || 'User'}
                       />
                     ) : (
-                      <AvatarFallback>
-                        {profile?.full_name?.[0].toUpperCase() ?? user?.email?.[0].toUpperCase() ?? <User className="size-4" />}
+                      <AvatarFallback className="bg-[#006655] text-white font-semibold">
+                        {profile?.full_name?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? <User className="size-4" />}
                       </AvatarFallback>
                     )}
                   </Avatar>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem>
-                    <Link href="/profile">Profile</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={async () => {
-                    await supabase.auth.signOut();
-                    window.location.reload();
-                  }}>
-                    Sign Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  <span className="hidden sm:inline-block text-xs font-semibold text-[#19322F]">
+                    {(typeof window !== 'undefined' && localStorage.getItem('luxe_demo_profile') && JSON.parse(localStorage.getItem('luxe_demo_profile')!).full_name) || profile?.full_name || user?.email || "Profile"}
+                  </span>
+                </Link>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors outline-none cursor-pointer">
+                    <User className="w-4 h-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem>
+                      <Link href="/profile" className="w-full cursor-pointer">{t("nav.profile")}</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      className="text-rose-600 focus:text-rose-600 cursor-pointer"
+                      onClick={async () => {
+                        document.cookie = "luxe_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                        localStorage.removeItem('luxe_demo_user');
+                        try { await supabase.auth.signOut(); } catch {}
+                        window.location.href = '/auth/login';
+                      }}
+                    >
+                      Sign Out (Cerrar Sesión)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             ) : (
               <Link href="/auth/login">
                 <Button variant="ghost">Sign In</Button>

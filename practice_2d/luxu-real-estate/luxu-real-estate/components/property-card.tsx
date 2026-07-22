@@ -8,12 +8,26 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useFavorites } from "@/lib/hooks/useFavorites";
 
+import { useLanguage } from "@/lib/i18n/LanguageContext";
+
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 interface PropertyCardProps {
-// ... (rest of props)
+  id: string;
+  slug: string;
+  title: string;
+  location: string;
+  price: string;
+  beds: number;
+  baths: number;
+  area: string;
+  imageUrl: string;
+  status?: string;
+  isExclusive?: boolean;
+  isNew?: boolean;
+  variant?: "standard" | "featured";
 }
 
 export function PropertyCard({
@@ -35,6 +49,16 @@ export function PropertyCard({
   const isFavorite = favorites.includes(slug);
   const supabase = createClient();
   const router = useRouter();
+  const { t } = useLanguage();
+
+  const getTranslatedStatus = (st?: string) => {
+    if (!st) return "";
+    const s = st.toUpperCase();
+    if (s.includes("SALE") || s.includes("VENTA")) return t("properties.forSaleBadge");
+    if (s.includes("RENT") || s.includes("RENTA")) return t("properties.forRentBadge");
+    if (s.includes("ACTIVE") || s.includes("ACTIVA")) return t("properties.activeBadge");
+    return st;
+  };
 
   const handleToggleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -65,12 +89,12 @@ export function PropertyCard({
             />
             {isExclusive && (
               <Badge className="absolute top-4 left-4 bg-white/90 text-[#19322F] hover:bg-white/90 backdrop-blur-sm border-none px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider">
-                Exclusive
+                Exclusivo
               </Badge>
             )}
             {isNew && (
               <Badge className="absolute top-4 left-4 bg-white/90 text-[#19322F] hover:bg-white/90 backdrop-blur-sm border-none px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider">
-                New Arrival
+                Nuevo
               </Badge>
             )}
             <Button
@@ -99,10 +123,10 @@ export function PropertyCard({
             </div>
             <div className="flex items-center gap-6 mt-6 pt-6 border-t border-[#19322F]/5">
               <div className="flex items-center gap-2 text-[#5C706D] text-sm">
-                <Bed className="w-4.5 h-4.5" /> {beds} Beds
+                <Bed className="w-4.5 h-4.5" /> {beds} {t("properties.beds")}
               </div>
               <div className="flex items-center gap-2 text-[#5C706D] text-sm">
-                <Bath className="w-4.5 h-4.5" /> {baths} Baths
+                <Bath className="w-4.5 h-4.5" /> {baths} {t("properties.baths")}
               </div>
               <div className="flex items-center gap-2 text-[#5C706D] text-sm">
                 <SquareFootage className="w-4.5 h-4.5" /> {area}
@@ -139,7 +163,7 @@ export function PropertyCard({
             <Badge className={`absolute bottom-3 left-3 text-white text-[10px] font-bold px-2 py-0.5 rounded border-none hover:opacity-90 ${
               status.includes("SALE") ? "bg-[#19322F]/90" : "bg-[#006655]/90"
             }`}>
-              {status}
+              {getTranslatedStatus(status)}
             </Badge>
           )}
         </div>
@@ -151,10 +175,10 @@ export function PropertyCard({
           <p className="text-[#5C706D] text-xs mb-4">{location}</p>
           <div className="mt-auto flex items-center justify-between pt-3 border-t border-gray-100">
             <div className="flex items-center gap-1 text-[#5C706D] text-xs">
-              <Bed className="w-3.5 h-3.5 text-[#006655]/80" /> {beds}
+              <Bed className="w-3.5 h-3.5 text-[#006655]/80" /> {beds} {t("properties.beds")}
             </div>
             <div className="flex items-center gap-1 text-[#5C706D] text-xs">
-              <Bath className="w-3.5 h-3.5 text-[#006655]/80" /> {baths}
+              <Bath className="w-3.5 h-3.5 text-[#006655]/80" /> {baths} {t("properties.baths")}
             </div>
             <div className="flex items-center gap-1 text-[#5C706D] text-xs">
               <SquareFootage className="w-3.5 h-3.5 text-[#006655]/80" /> {area}
