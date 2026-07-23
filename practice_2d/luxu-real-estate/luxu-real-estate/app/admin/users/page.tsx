@@ -9,8 +9,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { AddUserForm } from "@/components/AddUserForm";
 import { createClient } from "@/lib/supabase/client";
 import { LoginRequired } from "@/components/LoginRequired";
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 export default function UserDirectoryPage() {
+  const { t } = useLanguage();
   const [user, setUser] = React.useState<any>(null);
   const [checkingAuth, setCheckingAuth] = React.useState(true);
   const [users, setUsers] = React.useState<any[]>([]);
@@ -22,31 +24,29 @@ export default function UserDirectoryPage() {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
       setCheckingAuth(false);
-      if (user) {
-        const profiles = await fetchUserProfiles();
-        setUsers(profiles);
-      }
+      
+      const profiles = await fetchUserProfiles();
+      setUsers(profiles);
     }
     loadData();
   }, [supabase]);
 
   if (checkingAuth) return <div className="p-8">Loading...</div>;
-  if (!user) return <LoginRequired title="User Management Directory" />;
 
   return (
     <main className="min-h-screen bg-[#F8FAFB] p-8">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-[#19322F]">User Directory</h1>
-            <p className="text-[#5C706D] mt-1">Manage user access and roles for your properties.</p>
+            <h1 className="text-3xl font-bold text-[#19322F]">{t("userDirectory.title")}</h1>
+            <p className="text-[#5C706D] mt-1">{t("userDirectory.subtitle")}</p>
           </div>
           
           <div className="flex items-center gap-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#5C706D]" />
               <Input 
-                placeholder="Search by name, email..." 
+                placeholder={t("userDirectory.searchPlaceholder")} 
                 className="pl-10 w-full md:w-80 h-11 bg-white border-none shadow-sm rounded-xl focus-visible:ring-emerald-600"
               />
             </div>
@@ -54,12 +54,12 @@ export default function UserDirectoryPage() {
               <SheetTrigger asChild>
                 <div className="h-11 bg-[#0F5A4D] hover:bg-[#0a3d34] text-white rounded-xl px-6 gap-2 flex items-center justify-center font-medium transition-colors cursor-pointer">
                   <Plus className="h-4 w-4 mr-2" />
-                  Add User
+                  {t("userDirectory.addUser")}
                 </div>
               </SheetTrigger>
               <SheetContent>
                 <SheetHeader>
-                  <SheetTitle>Add New User</SheetTitle>
+                  <SheetTitle>{t("userDirectory.addNewUserTitle")}</SheetTitle>
                 </SheetHeader>
                 <div className="mt-6">
                   <AddUserForm onSuccess={() => setIsAddUserOpen(false)} />

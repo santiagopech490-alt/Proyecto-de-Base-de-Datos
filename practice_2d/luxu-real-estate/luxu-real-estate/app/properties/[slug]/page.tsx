@@ -1,5 +1,4 @@
 import { getPropertyBySlug } from '@/lib/services/property-service';
-import { notFound } from 'next/navigation';
 import { PropertyGallery } from '@/components/booking/PropertyGallery';
 import { PropertyHeader, KeyFeaturesRow } from '@/components/booking/PropertyHeader';
 import { AboutHome } from '@/components/booking/AboutHome';
@@ -10,23 +9,32 @@ import { MortgageCalculatorWidget } from '@/components/booking/MortgageCalculato
 import { ScheduleButton } from '@/components/booking/ScheduleButton';
 import { createClient } from '@/lib/supabase/server';
 import { LoginRequired } from '@/components/LoginRequired';
+import { cookies } from 'next/headers';
 
 export default async function PropertyPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  let user: any = null;
+  let hasAuthCookie = false;
 
-  if (!user) return <LoginRequired title="Exclusive Property Access" />;
+  try {
+    const cookieStore = await cookies();
+    hasAuthCookie = cookieStore.get('luxe_auth')?.value === 'true';
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    user = data?.user || null;
+  } catch (err) {
+    console.warn("Auth check in PropertyPage:", err);
+  }
+
+  if (!user && !hasAuthCookie) {
+    return <LoginRequired title="Exclusive Property Access" />;
+  }
 
   const { slug } = await params;
   const property = await getPropertyBySlug(slug);
-
-  if (!property) {
-    notFound();
-  }
 
   return (
     <div className="min-h-screen bg-soft-fog">

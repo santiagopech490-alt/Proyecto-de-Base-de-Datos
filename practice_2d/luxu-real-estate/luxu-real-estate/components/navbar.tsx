@@ -30,8 +30,8 @@ export function Navbar() {
   const navLinks = [
     { label: t("nav.dashboard"), href: "/admin/properties" },
     { label: t("nav.buy"), href: "/properties" },
-    { label: t("nav.rent"), href: "#" },
-    { label: t("nav.sell"), href: "#" },
+    { label: t("nav.rent"), href: "/properties?type=rent" },
+    { label: t("nav.sell"), href: "/admin/properties/add" },
     { label: t("nav.savedHomes"), href: "/favorites" },
     { label: t("nav.users"), href: "/users" },
   ];

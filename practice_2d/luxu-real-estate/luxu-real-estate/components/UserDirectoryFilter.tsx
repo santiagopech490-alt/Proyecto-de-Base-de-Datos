@@ -2,10 +2,11 @@
 
 import { useState, useMemo } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
 import { UserTable } from "./UserTable";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 export function UserDirectoryFilter({ users }: { users: any[] }) {
+  const { t } = useLanguage();
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("All");
 
@@ -27,27 +28,27 @@ export function UserDirectoryFilter({ users }: { users: any[] }) {
         <TabsList className="bg-transparent border-b border-slate-200 w-full justify-start rounded-none h-auto p-0 gap-8">
           <TabsTrigger 
             value="All" 
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 transition-all"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 transition-all cursor-pointer"
           >
-            All Users
+            {t("userDirectory.allUsers")}
           </TabsTrigger>
           <TabsTrigger 
             value="Agent" 
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 transition-all"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 transition-all cursor-pointer"
           >
-            Agents
+            {t("userDirectory.agents")}
           </TabsTrigger>
           <TabsTrigger 
             value="Broker" 
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 transition-all"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 transition-all cursor-pointer"
           >
-            Brokers
+            {t("userDirectory.brokers")}
           </TabsTrigger>
           <TabsTrigger 
             value="Administrator" 
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 transition-all"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 transition-all cursor-pointer"
           >
-            Admins
+            {t("userDirectory.admins")}
           </TabsTrigger>
         </TabsList>
         <div className="mt-8">
