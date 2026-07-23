@@ -1,7 +1,10 @@
-import { createClient } from './supabase/client';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { Property } from '@/types/property';
 
-const supabase = createClient();
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ujnaghovqcejwmwusakr.supabase.co';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_6ZT_fKACRFHA-ny5MUc3PA_jAD54ZZQ';
+
+const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey);
 
 export const userDashboardService = {
   /**
