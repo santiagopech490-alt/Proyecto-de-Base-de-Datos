@@ -38,9 +38,9 @@ export function PropertyTable({ properties }: PropertyTableProps) {
       } catch {}
     }
 
-    const propIds = new Set(properties.map(p => p.id));
-    const uniqueCustoms = customProps.filter(cp => !propIds.has(cp.id));
-    const combined = [...uniqueCustoms, ...properties];
+    const customIds = new Set(customProps.map(c => c.id));
+    const uniqueProps = properties.filter(p => !customIds.has(p.id) && !customIds.has(p.slug));
+    const combined = [...customProps, ...uniqueProps];
 
     const filtered = combined.filter(p => !deletedKeys.includes(p.id) && !deletedKeys.includes(p.slug));
     setList(filtered);

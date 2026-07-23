@@ -65,7 +65,7 @@ export async function getAllProperties(): Promise<Property[]> {
   }
 
   const realNoSqlProps = getRealNoSQLProperties();
-  const allMerged = [...dbProps, ...realNoSqlProps, ...mockProperties];
+  const allMerged = [...dbProps, ...mockProperties, ...realNoSqlProps];
 
   const seenIds = new Set<string>();
   const seenSlugs = new Set<string>();
