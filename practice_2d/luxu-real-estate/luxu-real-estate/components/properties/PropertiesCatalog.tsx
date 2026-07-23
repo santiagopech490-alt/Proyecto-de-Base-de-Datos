@@ -132,21 +132,24 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
       {/* Grid or Empty State */}
       {filteredProperties.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredProperties.map((property) => (
-            <PropertyCard 
-              key={property.id} 
-              id={property.id}
-              slug={property.slug}
-              title={property.title}
-              location={property.location}
-              price={`$${(property.price || 0).toLocaleString('en-US')}${filters.type === 'rent' || (property.status || '').toLowerCase().includes('rent') ? '/mes' : ''}`}
-              beds={property.beds}
-              baths={property.baths}
-              area={`${(property.sqft || 0).toLocaleString('en-US')} m²`}
-              imageUrl={(property.images && property.images.length > 0) ? property.images[0] : 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop'}
-              status={filters.type === 'rent' ? 'FOR RENT' : (property.status || 'active').toUpperCase()}
-            />
-          ))}
+          {filteredProperties.map((property) => {
+            const validSlug = property.slug || property.id || `prop-${property.title.toLowerCase().replace(/\s+/g, '-')}`;
+            return (
+              <PropertyCard 
+                key={property.id || validSlug} 
+                id={property.id || validSlug}
+                slug={validSlug}
+                title={property.title}
+                location={property.location || property.address || 'Beverly Hills, CA'}
+                price={`$${(property.price || 0).toLocaleString('en-US')}${filters.type === 'rent' || (property.status || '').toLowerCase().includes('rent') ? '/mes' : ''}`}
+                beds={property.beds || property.bedrooms || 0}
+                baths={property.baths || property.bathrooms || 0}
+                area={`${(property.sqft || 0).toLocaleString('en-US')} m²`}
+                imageUrl={(property.images && property.images.length > 0) ? property.images[0] : 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop'}
+                status={filters.type === 'rent' ? 'FOR RENT' : (property.status || 'active').toUpperCase()}
+              />
+            );
+          })}
         </div>
       ) : (
         <div className="bg-white rounded-3xl p-12 text-center shadow-sm border border-slate-100 max-w-2xl mx-auto my-8">

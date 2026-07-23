@@ -150,9 +150,10 @@ export async function getAllProperties(): Promise<Property[]> {
     if (data && data.length > 0) {
       dbProps = data.map(p => ({
         ...p,
-        location: p.address || p.location,
-        beds: p.bedrooms || p.beds,
-        baths: p.bathrooms || p.baths,
+        slug: p.slug || p.id || `property-${p.id}`,
+        location: p.address || p.location || 'Beverly Hills, CA',
+        beds: p.bedrooms || p.beds || 0,
+        baths: p.bathrooms || p.baths || 0,
       })) as Property[];
     }
   } catch (err) {
@@ -182,6 +183,7 @@ export async function getPropertyBySlug(slug: string): Promise<Property> {
     if (data) {
       return {
         ...data,
+        slug: data.slug || data.id,
         location: data.address || data.location,
         beds: data.bedrooms || data.beds,
         baths: data.bathrooms || data.baths,
