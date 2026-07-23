@@ -1,0 +1,404 @@
+-- ========================================================================
+-- PROYECTO: LUXU REAL ESTATE - BASE DE DATOS RELACIONAL (POSTGRESQL)
+-- SCRIPT DDL COMPLETO CON OBJETOS (TABLAS, VISTAS, DISPARADORES,
+-- PROCEDIMIENTOS ALMACENADOS, FUNCIONES, REGLAS, ÍNDICES Y RESTRICCIONES)
+-- MÁS DML CON 50 REGISTROS POR TABLA (TOTAL 200 REGISTROS RELACIONALES)
+-- ========================================================================
+
+BEGIN TRANSACTION;
+
+-- 1. LIMPIEZA DE OBJETOS PREVIOS
+DROP VIEW IF EXISTS vw_active_properties_summary CASCADE;
+DROP VIEW IF EXISTS vw_user_appointment_details CASCADE;
+DROP TRIGGER IF EXISTS trg_properties_timestamp ON properties CASCADE;
+DROP TRIGGER IF EXISTS trg_profiles_timestamp ON profiles CASCADE;
+DROP FUNCTION IF EXISTS fn_update_timestamp() CASCADE;
+DROP FUNCTION IF EXISTS fn_calculate_kpis() CASCADE;
+DROP PROCEDURE IF EXISTS sp_schedule_visit(UUID, UUID, TIMESTAMP WITH TIME ZONE, TEXT) CASCADE;
+DROP PROCEDURE IF EXISTS sp_update_property_price(UUID, NUMERIC) CASCADE;
+DROP TABLE IF EXISTS appointments CASCADE;
+DROP TABLE IF EXISTS user_favorites CASCADE;
+DROP TABLE IF EXISTS properties CASCADE;
+DROP TABLE IF EXISTS profiles CASCADE;
+
+-- ========================================================================
+-- 2. CREACIÓN DE TABLAS Y MANEJO DE RESTRICCIONES (6 TIPOS OBLIGATORIOS)
+-- ========================================================================
+
+-- TABLA 1: PROFILES (Usuarios y Perfiles)
+CREATE TABLE profiles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- PRIMARY KEY, DEFAULT
+    full_name VARCHAR(150) NOT NULL,              -- NOT NULL
+    email VARCHAR(150) UNIQUE NOT NULL,           -- UNIQUE, NOT NULL
+    role VARCHAR(20) NOT NULL DEFAULT 'Cliente'   -- DEFAULT, NOT NULL, CHECK
+        CHECK (role IN ('Admin', 'Agente', 'Cliente')),
+    location VARCHAR(100) DEFAULT 'Beverly Hills, CA', -- DEFAULT
+    avatar_url TEXT,
+    member_since TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- DEFAULT
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- TABLA 2: PROPERTIES (Inmuebles de Lujo)
+CREATE TABLE properties (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- PRIMARY KEY, DEFAULT
+    slug VARCHAR(200) UNIQUE NOT NULL,            -- UNIQUE, NOT NULL
+    title VARCHAR(200) NOT NULL,                  -- NOT NULL
+    description TEXT,
+    price NUMERIC(15, 2) NOT NULL CHECK (price >= 0), -- NOT NULL, CHECK
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'  -- DEFAULT, NOT NULL, CHECK
+        CHECK (status IN ('ACTIVE', 'FOR SALE', 'FOR RENT', 'PENDING')),
+    beds INT NOT NULL DEFAULT 1 CHECK (beds >= 0),-- DEFAULT, NOT NULL, CHECK
+    baths NUMERIC(3, 1) NOT NULL DEFAULT 1.0 CHECK (baths >= 0), -- DEFAULT, CHECK
+    sqft INT NOT NULL DEFAULT 50 CHECK (sqft > 0), -- DEFAULT, CHECK
+    location VARCHAR(150) NOT NULL,               -- NOT NULL
+    address VARCHAR(200),
+    amenities JSONB DEFAULT '[]'::jsonb,           -- DEFAULT
+    images JSONB DEFAULT '[]'::jsonb,              -- DEFAULT
+    owner_id UUID REFERENCES profiles(id) ON DELETE SET NULL, -- FOREIGN KEY
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- TABLA 3: USER_FAVORITES (Propiedades Favoritas Guardadas)
+CREATE TABLE user_favorites (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- PRIMARY KEY, DEFAULT
+    user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE, -- FOREIGN KEY, NOT NULL
+    property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE, -- FOREIGN KEY, NOT NULL
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_user_favorite UNIQUE (user_id, property_id) -- UNIQUE CONSTRAINT
+);
+
+-- TABLA 4: APPOINTMENTS (Citas para Visitas Guiadas)
+CREATE TABLE appointments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- PRIMARY KEY, DEFAULT
+    user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE, -- FOREIGN KEY
+    property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE, -- FOREIGN KEY
+    booking_date_time TIMESTAMP WITH TIME ZONE NOT NULL, -- NOT NULL
+    notes TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'Pending' -- DEFAULT, CHECK
+        CHECK (status IN ('Pending', 'Confirmed', 'Cancelled', 'Completed')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ========================================================================
+-- 3. CREACIÓN DE OBJETOS AVANZADOS EN LA BASE DE DATOS
+-- ========================================================================
+
+-- A) ÍNDICES (INDEXES) - ALMACENADOS EN PG_AM / PG_INDEX
+CREATE INDEX idx_properties_slug ON properties(slug);
+CREATE INDEX idx_properties_location ON properties(location);
+CREATE INDEX idx_properties_price ON properties(price);
+CREATE INDEX idx_appointments_user ON appointments(user_id);
+CREATE INDEX idx_user_favorites_user ON user_favorites(user_id);
+
+-- B) VISTAS (VIEWS) - ALMACENADAS EN PG_VIEWS
+CREATE VIEW vw_active_properties_summary AS
+SELECT 
+    p.id,
+    p.slug,
+    p.title,
+    p.price,
+    p.status,
+    p.beds,
+    p.baths,
+    p.sqft,
+    p.location,
+    pr.full_name AS owner_name,
+    pr.email AS owner_email
+FROM properties p
+LEFT JOIN profiles pr ON p.owner_id = pr.id
+WHERE p.status IN ('ACTIVE', 'FOR SALE', 'FOR RENT');
+
+CREATE VIEW vw_user_appointment_details AS
+SELECT 
+    a.id AS appointment_id,
+    pr.full_name AS client_name,
+    pr.email AS client_email,
+    p.title AS property_title,
+    p.location AS property_location,
+    a.booking_date_time,
+    a.status AS appointment_status
+FROM appointments a
+JOIN profiles pr ON a.user_id = pr.id
+JOIN properties p ON a.property_id = p.id;
+
+-- C) FUNCIONES Y DISPARADORES (FUNCTIONS & TRIGGERS) - ALMACENADOS EN PG_PROC / PG_TRIGGER
+CREATE OR REPLACE FUNCTION fn_update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_properties_timestamp
+BEFORE UPDATE ON properties
+FOR EACH ROW
+EXECUTE FUNCTION fn_update_timestamp();
+
+CREATE TRIGGER trg_profiles_timestamp
+BEFORE UPDATE ON profiles
+FOR EACH ROW
+EXECUTE FUNCTION fn_update_timestamp();
+
+CREATE OR REPLACE FUNCTION fn_calculate_kpis()
+RETURNS TABLE(total_properties BIGINT, active_properties BIGINT, total_value NUMERIC) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        COUNT(*)::BIGINT AS total_properties,
+        COUNT(*) FILTER (WHERE status = 'ACTIVE' OR status = 'FOR SALE')::BIGINT AS active_properties,
+        COALESCE(SUM(price), 0)::NUMERIC AS total_value
+    FROM properties;
+END;
+$$ LANGUAGE plpgsql;
+
+-- D) PROCEDIMIENTOS ALMACENADOS (STORED PROCEDURES) - ALMACENADOS EN PG_PROC
+CREATE OR REPLACE PROCEDURE sp_schedule_visit(
+    p_user_id UUID,
+    p_property_id UUID,
+    p_booking_time TIMESTAMP WITH TIME ZONE,
+    p_notes TEXT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO appointments (user_id, property_id, booking_date_time, notes, status)
+    VALUES (p_user_id, p_property_id, p_booking_time, p_notes, 'Pending');
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_update_property_price(
+    p_property_id UUID,
+    p_new_price NUMERIC
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF p_new_price < 0 THEN
+        RAISE EXCEPTION 'El precio no puede ser negativo: %', p_new_price;
+    END IF;
+
+    UPDATE properties
+    SET price = p_new_price, updated_at = CURRENT_TIMESTAMP
+    WHERE id = p_property_id;
+END;
+$$;
+
+
+-- ========================================================================
+-- 4. INSERCIÓN DE 50 REGISTROS REALES Y COHERENTES POR TABLA (DML)
+-- ========================================================================
+
+-- INSERCIÓN EN PROFILES (50 REGISTROS)
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380001', 'Carlos López', 'usuario1@luxeestate.com', 'Admin', 'Beverly Hills, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380002', 'María Pérez', 'usuario2@luxeestate.com', 'Admin', 'Malibu, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380003', 'Alejandro Romero', 'usuario3@luxeestate.com', 'Admin', 'Miami, FL', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380004', 'Sofía Rivera', 'usuario4@luxeestate.com', 'Admin', 'New York, NY', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380005', 'Javier Cruz', 'usuario5@luxeestate.com', 'Admin', 'Austin, TX', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380006', 'Valentina Gutierrez', 'usuario6@luxeestate.com', 'Agente', 'Seattle, WA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380007', 'Mateo García', 'usuario7@luxeestate.com', 'Agente', 'Aspen, CO', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380008', 'Camila Hernández', 'usuario8@luxeestate.com', 'Agente', 'Chicago, IL', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380009', 'Diego González', 'usuario9@luxeestate.com', 'Agente', 'San Francisco, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380010', 'Isabella Torres', 'usuario10@luxeestate.com', 'Agente', 'Scottsdale, AZ', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380011', 'Fernando Gómez', 'usuario11@luxeestate.com', 'Agente', 'Beverly Hills, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380012', 'Lucía Morales', 'usuario12@luxeestate.com', 'Agente', 'Malibu, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380013', 'Ricardo Reyes', 'usuario13@luxeestate.com', 'Agente', 'Miami, FL', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380014', 'Elena Rodríguez', 'usuario14@luxeestate.com', 'Agente', 'New York, NY', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380015', 'Gabriel Martínez', 'usuario15@luxeestate.com', 'Agente', 'Austin, TX', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380016', 'Santiago Sánchez', 'usuario16@luxeestate.com', 'Cliente', 'Seattle, WA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380017', 'Valeria Flores', 'usuario17@luxeestate.com', 'Cliente', 'Aspen, CO', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380018', 'Sebastián Díaz', 'usuario18@luxeestate.com', 'Cliente', 'Chicago, IL', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380019', 'Natalia Ortiz', 'usuario19@luxeestate.com', 'Cliente', 'San Francisco, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380020', 'Andrés Mendoza', 'usuario20@luxeestate.com', 'Cliente', 'Scottsdale, AZ', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380021', 'Carlos López', 'usuario21@luxeestate.com', 'Cliente', 'Beverly Hills, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380022', 'María Pérez', 'usuario22@luxeestate.com', 'Cliente', 'Malibu, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380023', 'Alejandro Romero', 'usuario23@luxeestate.com', 'Cliente', 'Miami, FL', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380024', 'Sofía Rivera', 'usuario24@luxeestate.com', 'Cliente', 'New York, NY', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380025', 'Javier Cruz', 'usuario25@luxeestate.com', 'Cliente', 'Austin, TX', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380026', 'Valentina Gutierrez', 'usuario26@luxeestate.com', 'Cliente', 'Seattle, WA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380027', 'Mateo García', 'usuario27@luxeestate.com', 'Cliente', 'Aspen, CO', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380028', 'Camila Hernández', 'usuario28@luxeestate.com', 'Cliente', 'Chicago, IL', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380029', 'Diego González', 'usuario29@luxeestate.com', 'Cliente', 'San Francisco, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380030', 'Isabella Torres', 'usuario30@luxeestate.com', 'Cliente', 'Scottsdale, AZ', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380031', 'Fernando Gómez', 'usuario31@luxeestate.com', 'Cliente', 'Beverly Hills, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380032', 'Lucía Morales', 'usuario32@luxeestate.com', 'Cliente', 'Malibu, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380033', 'Ricardo Reyes', 'usuario33@luxeestate.com', 'Cliente', 'Miami, FL', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380034', 'Elena Rodríguez', 'usuario34@luxeestate.com', 'Cliente', 'New York, NY', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380035', 'Gabriel Martínez', 'usuario35@luxeestate.com', 'Cliente', 'Austin, TX', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380036', 'Santiago Sánchez', 'usuario36@luxeestate.com', 'Cliente', 'Seattle, WA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380037', 'Valeria Flores', 'usuario37@luxeestate.com', 'Cliente', 'Aspen, CO', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380038', 'Sebastián Díaz', 'usuario38@luxeestate.com', 'Cliente', 'Chicago, IL', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380039', 'Natalia Ortiz', 'usuario39@luxeestate.com', 'Cliente', 'San Francisco, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380040', 'Andrés Mendoza', 'usuario40@luxeestate.com', 'Cliente', 'Scottsdale, AZ', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380041', 'Carlos López', 'usuario41@luxeestate.com', 'Cliente', 'Beverly Hills, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380042', 'María Pérez', 'usuario42@luxeestate.com', 'Cliente', 'Malibu, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380043', 'Alejandro Romero', 'usuario43@luxeestate.com', 'Cliente', 'Miami, FL', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380044', 'Sofía Rivera', 'usuario44@luxeestate.com', 'Cliente', 'New York, NY', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380045', 'Javier Cruz', 'usuario45@luxeestate.com', 'Cliente', 'Austin, TX', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380046', 'Valentina Gutierrez', 'usuario46@luxeestate.com', 'Cliente', 'Seattle, WA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380047', 'Mateo García', 'usuario47@luxeestate.com', 'Cliente', 'Aspen, CO', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380048', 'Camila Hernández', 'usuario48@luxeestate.com', 'Cliente', 'Chicago, IL', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380049', 'Diego González', 'usuario49@luxeestate.com', 'Cliente', 'San Francisco, CA', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+INSERT INTO profiles (id, full_name, email, role, location, avatar_url) VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380050', 'Isabella Torres', 'usuario50@luxeestate.com', 'Cliente', 'Scottsdale, AZ', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop');
+
+-- INSERCIÓN EN PROPERTIES (50 REGISTROS)
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380001', 'propiedad-casa-miami-1', 'Casa Lujosa en Miami #1', 'Exclusiva residencia de alto nivel con acabados de primera.', 475000, 'ACTIVE', 2, 2.5, 155, 'Miami, FL', '115 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380001');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380002', 'propiedad-departamento-austin-2', 'Departamento Lujosa en Austin #2', 'Exclusiva residencia de alto nivel con acabados de primera.', 600000, 'FOR SALE', 3, 3.5, 190, 'Austin, TX', '130 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380002');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380003', 'propiedad-villa-aspen-3', 'Villa Lujosa en Aspen #3', 'Exclusiva residencia de alto nivel con acabados de primera.', 725000, 'FOR RENT', 4, 4.5, 225, 'Aspen, CO', '145 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380003');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380004', 'propiedad-penthouse-san-francisco-4', 'Penthouse Lujosa en San Francisco #4', 'Exclusiva residencia de alto nivel con acabados de primera.', 850000, 'PENDING', 5, 5.5, 260, 'San Francisco, CA', '160 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380004');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380005', 'propiedad-residencia-de-playa-beverly-hills-5', 'Residencia de Playa Lujosa en Beverly Hills #5', 'Exclusiva residencia de alto nivel con acabados de primera.', 975000, 'ACTIVE', 6, 1.5, 295, 'Beverly Hills, CA', '175 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380005');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380006', 'propiedad-casa-miami-6', 'Casa Lujosa en Miami #6', 'Exclusiva residencia de alto nivel con acabados de primera.', 1100000, 'FOR SALE', 1, 2.5, 330, 'Miami, FL', '190 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380006');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380007', 'propiedad-departamento-austin-7', 'Departamento Lujosa en Austin #7', 'Exclusiva residencia de alto nivel con acabados de primera.', 1225000, 'FOR RENT', 2, 3.5, 365, 'Austin, TX', '205 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380007');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380008', 'propiedad-villa-aspen-8', 'Villa Lujosa en Aspen #8', 'Exclusiva residencia de alto nivel con acabados de primera.', 1350000, 'PENDING', 3, 4.5, 400, 'Aspen, CO', '220 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380008');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380009', 'propiedad-penthouse-san-francisco-9', 'Penthouse Lujosa en San Francisco #9', 'Exclusiva residencia de alto nivel con acabados de primera.', 1475000, 'ACTIVE', 4, 5.5, 435, 'San Francisco, CA', '235 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380009');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380010', 'propiedad-residencia-de-playa-beverly-hills-10', 'Residencia de Playa Lujosa en Beverly Hills #10', 'Exclusiva residencia de alto nivel con acabados de primera.', 1600000, 'FOR SALE', 5, 1.5, 470, 'Beverly Hills, CA', '250 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380010');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380011', 'propiedad-casa-miami-11', 'Casa Lujosa en Miami #11', 'Exclusiva residencia de alto nivel con acabados de primera.', 1725000, 'FOR RENT', 6, 2.5, 505, 'Miami, FL', '265 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380011');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380012', 'propiedad-departamento-austin-12', 'Departamento Lujosa en Austin #12', 'Exclusiva residencia de alto nivel con acabados de primera.', 1850000, 'PENDING', 1, 3.5, 540, 'Austin, TX', '280 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380012');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380013', 'propiedad-villa-aspen-13', 'Villa Lujosa en Aspen #13', 'Exclusiva residencia de alto nivel con acabados de primera.', 1975000, 'ACTIVE', 2, 4.5, 575, 'Aspen, CO', '295 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380013');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380014', 'propiedad-penthouse-san-francisco-14', 'Penthouse Lujosa en San Francisco #14', 'Exclusiva residencia de alto nivel con acabados de primera.', 2100000, 'FOR SALE', 3, 5.5, 610, 'San Francisco, CA', '310 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380014');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380015', 'propiedad-residencia-de-playa-beverly-hills-15', 'Residencia de Playa Lujosa en Beverly Hills #15', 'Exclusiva residencia de alto nivel con acabados de primera.', 2225000, 'FOR RENT', 4, 1.5, 645, 'Beverly Hills, CA', '325 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380015');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380016', 'propiedad-casa-miami-16', 'Casa Lujosa en Miami #16', 'Exclusiva residencia de alto nivel con acabados de primera.', 2350000, 'PENDING', 5, 2.5, 680, 'Miami, FL', '340 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380001');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380017', 'propiedad-departamento-austin-17', 'Departamento Lujosa en Austin #17', 'Exclusiva residencia de alto nivel con acabados de primera.', 2475000, 'ACTIVE', 6, 3.5, 715, 'Austin, TX', '355 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380002');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380018', 'propiedad-villa-aspen-18', 'Villa Lujosa en Aspen #18', 'Exclusiva residencia de alto nivel con acabados de primera.', 2600000, 'FOR SALE', 1, 4.5, 750, 'Aspen, CO', '370 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380003');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380019', 'propiedad-penthouse-san-francisco-19', 'Penthouse Lujosa en San Francisco #19', 'Exclusiva residencia de alto nivel con acabados de primera.', 2725000, 'FOR RENT', 2, 5.5, 785, 'San Francisco, CA', '385 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380004');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380020', 'propiedad-residencia-de-playa-beverly-hills-20', 'Residencia de Playa Lujosa en Beverly Hills #20', 'Exclusiva residencia de alto nivel con acabados de primera.', 2850000, 'PENDING', 3, 1.5, 820, 'Beverly Hills, CA', '400 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380005');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380021', 'propiedad-casa-miami-21', 'Casa Lujosa en Miami #21', 'Exclusiva residencia de alto nivel con acabados de primera.', 2975000, 'ACTIVE', 4, 2.5, 855, 'Miami, FL', '415 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380006');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380022', 'propiedad-departamento-austin-22', 'Departamento Lujosa en Austin #22', 'Exclusiva residencia de alto nivel con acabados de primera.', 3100000, 'FOR SALE', 5, 3.5, 890, 'Austin, TX', '430 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380007');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380023', 'propiedad-villa-aspen-23', 'Villa Lujosa en Aspen #23', 'Exclusiva residencia de alto nivel con acabados de primera.', 3225000, 'FOR RENT', 6, 4.5, 925, 'Aspen, CO', '445 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380008');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380024', 'propiedad-penthouse-san-francisco-24', 'Penthouse Lujosa en San Francisco #24', 'Exclusiva residencia de alto nivel con acabados de primera.', 3350000, 'PENDING', 1, 5.5, 960, 'San Francisco, CA', '460 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380009');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380025', 'propiedad-residencia-de-playa-beverly-hills-25', 'Residencia de Playa Lujosa en Beverly Hills #25', 'Exclusiva residencia de alto nivel con acabados de primera.', 3475000, 'ACTIVE', 2, 1.5, 995, 'Beverly Hills, CA', '475 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380010');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380026', 'propiedad-casa-miami-26', 'Casa Lujosa en Miami #26', 'Exclusiva residencia de alto nivel con acabados de primera.', 3600000, 'FOR SALE', 3, 2.5, 1030, 'Miami, FL', '490 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380011');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380027', 'propiedad-departamento-austin-27', 'Departamento Lujosa en Austin #27', 'Exclusiva residencia de alto nivel con acabados de primera.', 3725000, 'FOR RENT', 4, 3.5, 1065, 'Austin, TX', '505 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380012');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380028', 'propiedad-villa-aspen-28', 'Villa Lujosa en Aspen #28', 'Exclusiva residencia de alto nivel con acabados de primera.', 3850000, 'PENDING', 5, 4.5, 1100, 'Aspen, CO', '520 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380013');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380029', 'propiedad-penthouse-san-francisco-29', 'Penthouse Lujosa en San Francisco #29', 'Exclusiva residencia de alto nivel con acabados de primera.', 3975000, 'ACTIVE', 6, 5.5, 1135, 'San Francisco, CA', '535 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380014');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380030', 'propiedad-residencia-de-playa-beverly-hills-30', 'Residencia de Playa Lujosa en Beverly Hills #30', 'Exclusiva residencia de alto nivel con acabados de primera.', 4100000, 'FOR SALE', 1, 1.5, 1170, 'Beverly Hills, CA', '550 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380015');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380031', 'propiedad-casa-miami-31', 'Casa Lujosa en Miami #31', 'Exclusiva residencia de alto nivel con acabados de primera.', 4225000, 'FOR RENT', 2, 2.5, 1205, 'Miami, FL', '565 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380001');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380032', 'propiedad-departamento-austin-32', 'Departamento Lujosa en Austin #32', 'Exclusiva residencia de alto nivel con acabados de primera.', 4350000, 'PENDING', 3, 3.5, 1240, 'Austin, TX', '580 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380002');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380033', 'propiedad-villa-aspen-33', 'Villa Lujosa en Aspen #33', 'Exclusiva residencia de alto nivel con acabados de primera.', 4475000, 'ACTIVE', 4, 4.5, 1275, 'Aspen, CO', '595 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380003');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380034', 'propiedad-penthouse-san-francisco-34', 'Penthouse Lujosa en San Francisco #34', 'Exclusiva residencia de alto nivel con acabados de primera.', 4600000, 'FOR SALE', 5, 5.5, 1310, 'San Francisco, CA', '610 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380004');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380035', 'propiedad-residencia-de-playa-beverly-hills-35', 'Residencia de Playa Lujosa en Beverly Hills #35', 'Exclusiva residencia de alto nivel con acabados de primera.', 4725000, 'FOR RENT', 6, 1.5, 1345, 'Beverly Hills, CA', '625 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380005');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380036', 'propiedad-casa-miami-36', 'Casa Lujosa en Miami #36', 'Exclusiva residencia de alto nivel con acabados de primera.', 4850000, 'PENDING', 1, 2.5, 1380, 'Miami, FL', '640 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380006');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380037', 'propiedad-departamento-austin-37', 'Departamento Lujosa en Austin #37', 'Exclusiva residencia de alto nivel con acabados de primera.', 4975000, 'ACTIVE', 2, 3.5, 1415, 'Austin, TX', '655 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380007');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380038', 'propiedad-villa-aspen-38', 'Villa Lujosa en Aspen #38', 'Exclusiva residencia de alto nivel con acabados de primera.', 5100000, 'FOR SALE', 3, 4.5, 1450, 'Aspen, CO', '670 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380008');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380039', 'propiedad-penthouse-san-francisco-39', 'Penthouse Lujosa en San Francisco #39', 'Exclusiva residencia de alto nivel con acabados de primera.', 5225000, 'FOR RENT', 4, 5.5, 1485, 'San Francisco, CA', '685 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380009');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380040', 'propiedad-residencia-de-playa-beverly-hills-40', 'Residencia de Playa Lujosa en Beverly Hills #40', 'Exclusiva residencia de alto nivel con acabados de primera.', 5350000, 'PENDING', 5, 1.5, 1520, 'Beverly Hills, CA', '700 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380010');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380041', 'propiedad-casa-miami-41', 'Casa Lujosa en Miami #41', 'Exclusiva residencia de alto nivel con acabados de primera.', 5475000, 'ACTIVE', 6, 2.5, 1555, 'Miami, FL', '715 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380011');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380042', 'propiedad-departamento-austin-42', 'Departamento Lujosa en Austin #42', 'Exclusiva residencia de alto nivel con acabados de primera.', 5600000, 'FOR SALE', 1, 3.5, 1590, 'Austin, TX', '730 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380012');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380043', 'propiedad-villa-aspen-43', 'Villa Lujosa en Aspen #43', 'Exclusiva residencia de alto nivel con acabados de primera.', 5725000, 'FOR RENT', 2, 4.5, 1625, 'Aspen, CO', '745 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380013');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380044', 'propiedad-penthouse-san-francisco-44', 'Penthouse Lujosa en San Francisco #44', 'Exclusiva residencia de alto nivel con acabados de primera.', 5850000, 'PENDING', 3, 5.5, 1660, 'San Francisco, CA', '760 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380014');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380045', 'propiedad-residencia-de-playa-beverly-hills-45', 'Residencia de Playa Lujosa en Beverly Hills #45', 'Exclusiva residencia de alto nivel con acabados de primera.', 5975000, 'ACTIVE', 4, 1.5, 1695, 'Beverly Hills, CA', '775 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380015');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380046', 'propiedad-casa-miami-46', 'Casa Lujosa en Miami #46', 'Exclusiva residencia de alto nivel con acabados de primera.', 6100000, 'FOR SALE', 5, 2.5, 1730, 'Miami, FL', '790 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380001');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380047', 'propiedad-departamento-austin-47', 'Departamento Lujosa en Austin #47', 'Exclusiva residencia de alto nivel con acabados de primera.', 6225000, 'FOR RENT', 6, 3.5, 1765, 'Austin, TX', '805 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380002');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380048', 'propiedad-villa-aspen-48', 'Villa Lujosa en Aspen #48', 'Exclusiva residencia de alto nivel con acabados de primera.', 6350000, 'PENDING', 1, 4.5, 1800, 'Aspen, CO', '820 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380003');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380049', 'propiedad-penthouse-san-francisco-49', 'Penthouse Lujosa en San Francisco #49', 'Exclusiva residencia de alto nivel con acabados de primera.', 6475000, 'ACTIVE', 2, 5.5, 1835, 'San Francisco, CA', '835 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380004');
+INSERT INTO properties (id, slug, title, description, price, status, beds, baths, sqft, location, address, amenities, images, owner_id) VALUES ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380050', 'propiedad-residencia-de-playa-beverly-hills-50', 'Residencia de Playa Lujosa en Beverly Hills #50', 'Exclusiva residencia de alto nivel con acabados de primera.', 6600000, 'FOR SALE', 3, 1.5, 1870, 'Beverly Hills, CA', '850 Luxury Avenue', '["Alberca Privada", "Casa Inteligente", "Vista al Mar", "Gimnasio Privado", "Cava de Vinos"]'::jsonb, '["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop"]'::jsonb, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380005');
+
+-- INSERCIÓN EN USER_FAVORITES (50 REGISTROS)
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380001', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380001', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380004');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380002', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380002', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380007');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380003', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380003', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380010');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380004', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380004', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380013');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380005', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380005', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380016');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380006', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380006', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380019');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380007', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380007', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380022');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380008', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380008', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380025');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380009', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380009', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380028');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380010', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380010', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380031');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380011', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380011', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380034');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380012', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380012', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380037');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380013', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380013', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380040');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380014', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380014', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380043');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380015', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380015', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380046');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380016', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380016', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380049');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380017', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380017', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380002');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380018', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380018', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380005');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380019', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380019', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380008');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380020', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380020', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380011');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380021', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380021', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380014');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380022', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380022', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380017');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380023', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380023', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380020');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380024', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380024', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380023');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380025', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380025', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380026');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380026', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380026', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380029');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380027', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380027', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380032');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380028', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380028', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380035');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380029', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380029', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380038');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380030', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380030', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380041');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380031', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380031', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380044');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380032', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380032', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380047');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380033', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380033', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380050');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380034', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380034', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380003');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380035', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380035', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380006');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380036', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380036', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380009');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380037', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380037', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380012');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380038', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380038', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380015');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380039', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380039', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380018');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380040', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380040', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380021');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380041', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380041', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380024');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380042', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380042', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380027');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380043', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380043', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380030');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380044', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380044', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380033');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380045', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380045', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380036');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380046', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380046', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380039');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380047', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380047', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380042');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380048', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380048', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380045');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380049', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380049', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380048');
+INSERT INTO user_favorites (id, user_id, property_id) VALUES ('c0eebc99-9c0b-4ef8-bb6d-6bb9bd380050', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380050', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380001');
+
+-- INSERCIÓN EN APPOINTMENTS (50 REGISTROS)
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380001', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380003', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380005', '2026-08-02 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #1', 'Pending');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380002', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380005', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380009', '2026-08-03 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #2', 'Confirmed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380003', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380007', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380013', '2026-08-04 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #3', 'Completed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380004', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380009', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380017', '2026-08-05 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #4', 'Cancelled');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380005', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380011', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380021', '2026-08-06 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #5', 'Pending');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380006', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380013', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380025', '2026-08-07 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #6', 'Confirmed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380007', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380015', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380029', '2026-08-08 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #7', 'Completed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380008', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380017', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380033', '2026-08-09 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #8', 'Cancelled');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380009', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380019', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380037', '2026-08-10 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #9', 'Pending');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380010', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380021', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380041', '2026-08-11 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #10', 'Confirmed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380011', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380023', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380045', '2026-08-12 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #11', 'Completed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380012', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380025', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380049', '2026-08-13 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #12', 'Cancelled');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380013', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380027', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380003', '2026-08-14 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #13', 'Pending');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380014', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380029', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380007', '2026-08-15 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #14', 'Confirmed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380015', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380031', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380011', '2026-08-16 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #15', 'Completed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380016', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380033', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380015', '2026-08-17 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #16', 'Cancelled');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380017', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380035', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380019', '2026-08-18 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #17', 'Pending');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380018', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380037', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380023', '2026-08-19 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #18', 'Confirmed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380019', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380039', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380027', '2026-08-20 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #19', 'Completed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380020', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380041', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380031', '2026-08-21 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #20', 'Cancelled');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380021', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380043', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380035', '2026-08-22 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #21', 'Pending');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380022', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380045', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380039', '2026-08-23 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #22', 'Confirmed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380023', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380047', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380043', '2026-08-24 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #23', 'Completed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380024', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380049', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380047', '2026-08-25 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #24', 'Cancelled');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380025', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380001', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380001', '2026-08-26 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #25', 'Pending');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380026', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380003', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380005', '2026-08-27 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #26', 'Confirmed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380027', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380005', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380009', '2026-08-28 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #27', 'Completed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380028', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380007', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380013', '2026-08-29 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #28', 'Cancelled');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380029', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380009', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380017', '2026-08-30 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #29', 'Pending');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380030', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380011', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380021', '2026-08-01 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #30', 'Confirmed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380031', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380013', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380025', '2026-08-02 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #31', 'Completed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380032', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380015', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380029', '2026-08-03 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #32', 'Cancelled');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380033', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380017', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380033', '2026-08-04 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #33', 'Pending');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380034', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380019', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380037', '2026-08-05 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #34', 'Confirmed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380035', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380021', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380041', '2026-08-06 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #35', 'Completed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380036', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380023', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380045', '2026-08-07 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #36', 'Cancelled');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380037', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380025', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380049', '2026-08-08 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #37', 'Pending');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380038', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380027', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380003', '2026-08-09 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #38', 'Confirmed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380039', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380029', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380007', '2026-08-10 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #39', 'Completed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380040', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380031', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380011', '2026-08-11 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #40', 'Cancelled');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380041', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380033', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380015', '2026-08-12 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #41', 'Pending');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380042', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380035', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380019', '2026-08-13 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #42', 'Confirmed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380043', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380037', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380023', '2026-08-14 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #43', 'Completed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380044', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380039', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380027', '2026-08-15 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #44', 'Cancelled');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380045', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380041', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380031', '2026-08-16 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #45', 'Pending');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380046', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380043', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380035', '2026-08-17 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #46', 'Confirmed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380047', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380045', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380039', '2026-08-18 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #47', 'Completed');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380048', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380047', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380043', '2026-08-19 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #48', 'Cancelled');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380049', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380049', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380047', '2026-08-20 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #49', 'Pending');
+INSERT INTO appointments (id, user_id, property_id, booking_date_time, notes, status) VALUES ('d0eebc99-9c0b-4ef8-bb6d-6bb9bd380050', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380001', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380001', '2026-08-21 10:00:00+00', 'Solicitud de recorrido presencial guiado para la propiedad #50', 'Confirmed');
+
+COMMIT;
+-- ========================================================================
+-- FIN DEL SCRIPT PostgreSQL DDL/DML COMPLETO
+-- ========================================================================
