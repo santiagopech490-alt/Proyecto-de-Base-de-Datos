@@ -17,38 +17,37 @@ export function useFavorites() {
       user = data.user;
     } catch (err: any) {
       if (err.name === 'AbortError' || err.message?.includes('Lock') || err.message?.includes('stole')) {
-        console.warn("Auth check aborted/stolen (ignoring):", err.message);
         return; // Exit silently
       }
-      console.error("Unexpected auth error:", err);
     }
 
     if (user) {
-      // Fetch from Supabase
-      const { data, error } = await supabase
-        .from('user_favorites')
-        .select('property_id')
-        .eq('user_id', user.id);
+      try {
+        const { data, error } = await supabase
+          .from('user_favorites')
+          .select('property_id')
+          .eq('user_id', user.id);
 
-      if (error) {
-        if ((error as any).name === 'AbortError' || (error as any).message?.includes('AbortError')) {
-          console.warn("Supabase fetch aborted (ignoring):", error);
-        } else {
-          console.error("Supabase fetch error details:", JSON.stringify(error, null, 2));
+        if (!error && data) {
+          const remoteIds = data.map((fav: any) => fav.property_id);
+          const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+          const merged = Array.from(new Set([...remoteIds, ...local]));
+          setFavorites(merged);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          setLoading(false);
+          return;
         }
-        return;
+      } catch (err) {
+        console.warn("Supabase favorites fetch notice:", err);
       }
-      if (data) {
-        const remoteIds = data.map((fav: any) => fav.property_id);
-        setFavorites(remoteIds);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteIds));
-      }
-    } else {
-      // Fetch from localStorage
-      const local = localStorage.getItem(STORAGE_KEY);
-      if (local) {
+    }
+    
+    // Fetch from localStorage fallback
+    const local = localStorage.getItem(STORAGE_KEY);
+    if (local) {
+      try {
         setFavorites(JSON.parse(local));
-      }
+      } catch {}
     }
     setLoading(false);
   }, [supabase]);
@@ -58,31 +57,43 @@ export function useFavorites() {
   }, [fetchFavorites]);
 
   const toggleFavorite = async (propertyId: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    console.log("toggleFavorite action for:", propertyId, "User ID:", user?.id);
+    let user = null;
+    try {
+      const { data } = await supabase.auth.getUser();
+      user = data.user;
+    } catch {}
+
     let newFavorites: string[];
 
     if (favorites.includes(propertyId)) {
-      console.log("Removing favorite from state and DB");
       newFavorites = favorites.filter(id => id !== propertyId);
       
       if (user) {
-        const { error } = await supabase
-          .from('user_favorites')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('property_id', propertyId);
-        if (error) console.error("Error deleting from DB:", error);
+        try {
+          await supabase
+            .from('user_favorites')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('property_id', propertyId);
+        } catch (dbErr) {
+          console.warn("Notice removing favorite from DB:", dbErr);
+        }
       }
     } else {
-      console.log("Adding favorite to state and DB");
       newFavorites = [...favorites, propertyId];
       
       if (user) {
-        const { error } = await supabase
-          .from('user_favorites')
-          .insert({ user_id: user.id, property_id: propertyId });
-        if (error) console.error("Error inserting to DB:", error);
+        try {
+          const { error } = await supabase
+            .from('user_favorites')
+            .insert({ user_id: user.id, property_id: propertyId });
+          
+          if (error) {
+            console.warn("Notice inserting favorite to DB:", error.message || error);
+          }
+        } catch (dbErr) {
+          console.warn("Notice inserting favorite to DB:", dbErr);
+        }
       }
     }
 
@@ -102,9 +113,11 @@ export function useFavorites() {
       property_id: id
     }));
 
-    await supabase
-      .from('user_favorites')
-      .insert(favsToInsert);
+    try {
+      await supabase
+        .from('user_favorites')
+        .insert(favsToInsert);
+    } catch {}
 
     fetchFavorites();
   };
