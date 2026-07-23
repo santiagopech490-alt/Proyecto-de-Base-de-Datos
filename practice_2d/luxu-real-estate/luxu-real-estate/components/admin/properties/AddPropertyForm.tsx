@@ -42,53 +42,65 @@ export function AddPropertyForm({ userId }: { userId: string }) {
     try {
       const slug = formData.title.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '') + '-' + Math.random().toString(36).substring(2, 7);
       
-      const newProp = {
+      const priceNum = parseFloat(formData.price) || 1000000;
+      const bedsNum = parseInt(formData.beds) || 3;
+      const bathsNum = parseFloat(formData.baths) || 2;
+      const sqftNum = parseInt(formData.sqft) || 2000;
+      const garageNum = parseInt(formData.garage || '0');
+
+      const supabasePayload = {
         title: formData.title,
         description: formData.description,
-        price: parseFloat(formData.price) || 1000000,
+        price: priceNum,
         address: formData.location,
         location: formData.location,
         city: formData.location.split(',')[0] || formData.location || 'Beverly Hills',
-        neighborhood: 'Luxury District',
-        bedrooms: parseInt(formData.beds) || 3,
-        beds: parseInt(formData.beds) || 3,
-        bathrooms: parseFloat(formData.baths) || 2,
-        baths: parseFloat(formData.baths) || 2,
-        sqft: parseInt(formData.sqft) || 2000,
-        garage: parseInt(formData.garage || '0'),
+        neighborhood: 'District Luxe',
+        bedrooms: bedsNum,
+        beds: bedsNum,
+        bathrooms: bathsNum,
+        baths: bathsNum,
+        sqft: sqftNum,
+        garage: garageNum,
         images: [formData.imageUrl || 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop'],
-        slug,
+        slug: slug,
         status: 'active',
-        amenities: ['New Construction', 'Luxury'],
+        owner_id: (userId && userId.length > 20) ? userId : null,
+        created_at: new Date().toISOString()
       };
 
-      // 1. Attempt Supabase DB insertion
+      // 1. Direct Supabase DB Insertion
+      let dbInsertedProp = null;
       try {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('properties')
-          .insert([{ 
-            ...newProp, 
-            user_id: (userId && userId.length > 20) ? userId : null 
-          }]);
+          .insert([supabasePayload])
+          .select();
         
         if (error) {
           console.warn("Supabase insert notice:", error.message || error);
+        } else if (data && data.length > 0) {
+          dbInsertedProp = data[0];
         }
       } catch (dbErr) {
         console.warn("Supabase insert caught exception:", dbErr);
       }
 
-      // 2. Save locally so new property appears immediately in property list
+      // 2. Save locally for instant rendering & fallback
+      const finalProp = dbInsertedProp || {
+        ...supabasePayload,
+        id: 'prop-' + Date.now()
+      };
+
       if (typeof window !== 'undefined') {
         const existing = localStorage.getItem('luxe_custom_properties');
         const list = existing ? JSON.parse(existing) : [];
-        list.unshift({ ...newProp, id: 'prop-' + Date.now() });
+        list.unshift(finalProp);
         localStorage.setItem('luxe_custom_properties', JSON.stringify(list));
       }
 
       toast.success(t("createListing.successMsg"));
       router.push('/admin/properties');
-      window.location.href = '/admin/properties';
     } catch (error: any) {
       console.error('Error adding property:', error);
       toast.error('Error publishing property');
@@ -183,53 +195,70 @@ export function AddPropertyForm({ userId }: { userId: string }) {
 
         <div className="space-y-6">
           <Card className="p-6 border-none shadow-sm ring-1 ring-slate-100">
-            <h2 className="text-lg font-semibold mb-6">{t("createListing.specifications")}</h2>
+            <h2 className="text-lg font-semibold mb-6">{t("createListing.propertySpecs")}</h2>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-medium uppercase text-slate-500">{t("createListing.bedrooms")}</label>
-                  <div className="relative">
-                    <Bed className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input name="beds" type="number" className="pl-10" value={formData.beds} onChange={handleChange} required />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-medium uppercase text-slate-500">{t("createListing.bathrooms")}</label>
-                  <div className="relative">
-                    <Bath className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input name="baths" type="number" step="0.5" className="pl-10" value={formData.baths} onChange={handleChange} required />
-                  </div>
-                </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                  <Bed className="h-4 w-4 text-slate-400" /> {t("createListing.bedrooms")}
+                </label>
+                <Input 
+                  name="beds" 
+                  type="number" 
+                  placeholder="4" 
+                  value={formData.beds}
+                  onChange={handleChange}
+                  required
+                />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-medium uppercase text-slate-500">{t("createListing.sqft")}</label>
-                  <div className="relative">
-                    <Square className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input name="sqft" type="number" className="pl-10" value={formData.sqft} onChange={handleChange} required />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-medium uppercase text-slate-500">{t("createListing.garage")}</label>
-                  <div className="relative">
-                    <Car className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input name="garage" type="number" className="pl-10" value={formData.garage} onChange={handleChange} />
-                  </div>
-                </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                  <Bath className="h-4 w-4 text-slate-400" /> {t("createListing.bathrooms")}
+                </label>
+                <Input 
+                  name="baths" 
+                  type="number" 
+                  step="0.5" 
+                  placeholder="3.5" 
+                  value={formData.baths}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                  <Square className="h-4 w-4 text-slate-400" /> {t("createListing.squareFeet")}
+                </label>
+                <Input 
+                  name="sqft" 
+                  type="number" 
+                  placeholder="3500" 
+                  value={formData.sqft}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                  <Car className="h-4 w-4 text-slate-400" /> {t("createListing.garageSpaces")}
+                </label>
+                <Input 
+                  name="garage" 
+                  type="number" 
+                  placeholder="2" 
+                  value={formData.garage}
+                  onChange={handleChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">{t("createListing.imageUrl")}</label>
+                <Input 
+                  name="imageUrl" 
+                  placeholder="https://..." 
+                  value={formData.imageUrl}
+                  onChange={handleChange}
+                />
               </div>
             </div>
-          </Card>
-
-          <Card className="p-6 border-none shadow-sm ring-1 ring-slate-100 bg-slate-50/50">
-            <h2 className="text-sm font-semibold mb-4 text-[#0F5A4D]">{t("createListing.mainImage")}</h2>
-            <Input 
-              name="imageUrl" 
-              placeholder="https://..." 
-              className="bg-white"
-              value={formData.imageUrl}
-              onChange={handleChange}
-            />
-            <p className="text-[10px] text-slate-400 mt-2">{t("createListing.imageHint")}</p>
           </Card>
         </div>
       </div>
