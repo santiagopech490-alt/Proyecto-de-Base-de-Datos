@@ -1,6 +1,6 @@
 import { Property } from '@/types/property';
 import { supabase } from '@/lib/supabase';
-import { redisCache } from '@/lib/redis';
+import { getNoSQLCatalogProperties } from '@/lib/nosql-properties';
 
 // Mock data for local development/demo
 const mockProperties: Property[] = [
@@ -157,15 +157,26 @@ export async function getAllProperties(): Promise<Property[]> {
       })) as Property[];
     }
   } catch (err) {
-    console.warn('Supabase unreachable, using mock properties:', err);
+    console.warn('Supabase unreachable, using fallback properties:', err);
   }
 
-  // Merge DB properties with mockProperties (excluding duplicate IDs/slugs)
-  const dbIds = new Set(dbProps.map(p => p.id));
-  const dbSlugs = new Set(dbProps.map(p => p.slug));
+  const noSqlCatalog = getNoSQLCatalogProperties();
+  const allMerged = [...dbProps, ...mockProperties, ...noSqlCatalog];
 
-  const uniqueMock = mockProperties.filter(p => !dbIds.has(p.id) && !dbSlugs.has(p.slug));
-  return [...dbProps, ...uniqueMock];
+  const seenIds = new Set<string>();
+  const seenSlugs = new Set<string>();
+  const uniqueProps: Property[] = [];
+
+  for (const p of allMerged) {
+    const effectiveSlug = p.slug || p.id;
+    if (!seenIds.has(p.id) && !seenSlugs.has(effectiveSlug)) {
+      seenIds.add(p.id);
+      seenSlugs.add(effectiveSlug);
+      uniqueProps.push(p);
+    }
+  }
+
+  return uniqueProps;
 }
 
 export async function getPropertiesByOwner(ownerId: string): Promise<Property[]> {
@@ -173,35 +184,10 @@ export async function getPropertiesByOwner(ownerId: string): Promise<Property[]>
 }
 
 export async function getPropertyBySlug(slug: string): Promise<Property> {
-  try {
-    const { data } = await supabase
-      .from('properties')
-      .select('*')
-      .or(`slug.eq.${slug},id.eq.${slug}`)
-      .single();
-
-    if (data) {
-      return {
-        ...data,
-        slug: data.slug || data.id,
-        location: data.address || data.location,
-        beds: data.bedrooms || data.beds,
-        baths: data.bathrooms || data.baths,
-      } as Property;
-    }
-  } catch (err) {
-    console.warn(`Supabase fetch error for slug ${slug}:`, err);
-  }
-
-  // Match exact slug or ID in mockProperties
-  const found = mockProperties.find(p => p.slug === slug || p.id === slug);
+  const all = await getAllProperties();
+  const found = all.find(p => p.slug === slug || p.id === slug || slug.includes(p.slug) || p.slug.includes(slug));
   if (found) return found;
 
-  // Match partial slug
-  const partial = mockProperties.find(p => slug.includes(p.slug) || p.slug.includes(slug));
-  if (partial) return partial;
-
-  // Fallback: Always return a valid property so detail views NEVER 404!
   const titleFormatted = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   return {
     id: slug,
