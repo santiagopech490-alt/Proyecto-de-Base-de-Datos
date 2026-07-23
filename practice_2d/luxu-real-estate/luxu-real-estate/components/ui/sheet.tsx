@@ -12,11 +12,13 @@ function Sheet({ ...props }: SheetPrimitive.Root.Props) {
 }
 
 function SheetTrigger({ asChild, render, children, ...props }: any) {
-  if (render) {
-    return <SheetPrimitive.Trigger data-slot="sheet-trigger" nativeButton={false} render={render} {...props} />;
-  }
-  if (asChild && React.isValidElement(children)) {
-    return <SheetPrimitive.Trigger data-slot="sheet-trigger" nativeButton={false} render={children} {...props} />;
+  const targetRender = render || (asChild && React.isValidElement(children) ? children : null);
+  if (targetRender) {
+    const isBtn = React.isValidElement(targetRender) && (
+      targetRender.type === 'button' || 
+      (typeof targetRender.type === 'function' && (targetRender.type.name === 'Button' || targetRender.type.displayName === 'Button'))
+    );
+    return <SheetPrimitive.Trigger data-slot="sheet-trigger" nativeButton={isBtn} render={targetRender} {...props} />;
   }
   return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props}>{children}</SheetPrimitive.Trigger>;
 }
