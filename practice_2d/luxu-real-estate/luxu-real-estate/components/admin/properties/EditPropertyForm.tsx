@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, ArrowLeft, Home, MapPin, DollarSign, Bed, Bath, Square, Car, Save } from 'lucide-react';
+import { Loader2, ArrowLeft, Home, MapPin, DollarSign, Save } from 'lucide-react';
 import Link from 'next/link';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { getPropertyBySlug } from '@/lib/services/property-service';
@@ -18,7 +18,7 @@ export function EditPropertyForm({ propertyId }: { propertyId: string }) {
   const [isFetching, setIsFetching] = useState(true);
   const router = useRouter();
   const supabase = createClient();
-  const { t, language } = useLanguage();
+  const { language } = useLanguage();
 
   const [formData, setFormData] = useState({
     title: '',
@@ -30,7 +30,7 @@ export function EditPropertyForm({ propertyId }: { propertyId: string }) {
     sqft: '',
     garage: '',
     imageUrl: '',
-    status: 'ACTIVE'
+    status: 'active'
   });
 
   useEffect(() => {
@@ -48,7 +48,7 @@ export function EditPropertyForm({ propertyId }: { propertyId: string }) {
             sqft: (prop.sqft || 2500).toString(),
             garage: (prop.garage || 2).toString(),
             imageUrl: (prop.images && prop.images.length > 0) ? prop.images[0] : 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop',
-            status: prop.status || 'ACTIVE'
+            status: prop.status || 'active'
           });
         }
       } catch (err) {
@@ -95,32 +95,51 @@ export function EditPropertyForm({ propertyId }: { propertyId: string }) {
         status: formData.status
       };
 
-      // 1. Update in Supabase DB by id or slug
+      // 1. Update in Supabase DB with Promise timeout to prevent hanging
       try {
-        const { error: updateError } = await supabase
-          .from('properties')
-          .update({
-            title: formData.title,
-            description: formData.description,
-            price: priceNum,
-            address: formData.location,
-            bedrooms: bedsNum,
-            bathrooms: bathsNum,
-            sqft: sqftNum,
-            garage: garageNum,
-            images: [validImage],
-            status: formData.status
-          })
-          .or(`id.eq.${propertyId},slug.eq.${propertyId}`);
+        const supabasePromise = (async () => {
+          if (propertyId.includes('-') && propertyId.length > 20) {
+            return await supabase
+              .from('properties')
+              .update({
+                title: formData.title,
+                description: formData.description,
+                price: priceNum,
+                address: formData.location,
+                bedrooms: bedsNum,
+                bathrooms: bathsNum,
+                sqft: sqftNum,
+                garage: garageNum,
+                images: [validImage],
+                status: formData.status
+              })
+              .eq('id', propertyId);
+          } else {
+            return await supabase
+              .from('properties')
+              .update({
+                title: formData.title,
+                description: formData.description,
+                price: priceNum,
+                address: formData.location,
+                bedrooms: bedsNum,
+                bathrooms: bathsNum,
+                sqft: sqftNum,
+                garage: garageNum,
+                images: [validImage],
+                status: formData.status
+              })
+              .eq('slug', propertyId);
+          }
+        })();
 
-        if (updateError) {
-          console.warn("Supabase update warning:", updateError.message || updateError);
-        }
+        const timeoutPromise = new Promise(res => setTimeout(res, 1200));
+        await Promise.race([supabasePromise, timeoutPromise]);
       } catch (dbErr) {
-        console.warn("Supabase update caught exception:", dbErr);
+        console.warn("Supabase update error (non-blocking):", dbErr);
       }
 
-      // 2. Update in localStorage custom properties for instant fallback
+      // 2. Update in localStorage custom properties for instant client-side update
       if (typeof window !== 'undefined') {
         const existing = localStorage.getItem('luxe_custom_properties');
         let list = existing ? JSON.parse(existing) : [];
@@ -133,7 +152,7 @@ export function EditPropertyForm({ propertyId }: { propertyId: string }) {
         localStorage.setItem('luxe_custom_properties', JSON.stringify(list));
       }
 
-      toast.success(language === 'es' ? 'Propiedad actualizada exitosamente en Supabase' : 'Property updated successfully in Supabase');
+      toast.success(language === 'es' ? 'Propiedad actualizada exitosamente' : 'Property updated successfully');
       router.push('/admin/properties');
     } catch (err: any) {
       console.error("Edit property error:", err);
@@ -163,7 +182,7 @@ export function EditPropertyForm({ propertyId }: { propertyId: string }) {
           <Button type="button" variant="outline" onClick={() => router.back()}>
             {language === 'es' ? 'Cancelar' : 'Cancel'}
           </Button>
-          <Button type="submit" disabled={isLoading} className="bg-[#0F5A4D] hover:bg-[#0a3d34] text-white cursor-pointer">
+          <Button type="submit" disabled={isLoading} className="bg-[#0F5A4D] hover:bg-[#0a3d34] text-white cursor-pointer font-bold px-6">
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
