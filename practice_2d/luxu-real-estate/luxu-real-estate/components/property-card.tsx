@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Bed, Bath, MapPin, Heart } from "lucide-react";
@@ -40,10 +41,17 @@ export function PropertyCard({
   isNew,
   variant = "standard",
 }: PropertyCardProps) {
+  const [mounted, setMounted] = useState(false);
   const { favorites, toggleFavorite } = useFavorites();
   const targetKey = slug || id;
   const isFavorite = favorites.includes(slug) || favorites.includes(id);
   const { t, language } = useLanguage();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const activeIsFavorite = mounted ? isFavorite : false;
 
   const getTranslatedStatus = (st?: string) => {
     if (!st) return "";
@@ -77,12 +85,13 @@ export function PropertyCard({
         <button
           type="button"
           onClick={handleToggleFavorite}
+          suppressHydrationWarning
           className={`absolute top-4 right-4 w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-all cursor-pointer z-30 shadow-md ${
-            isFavorite ? "text-red-500 bg-white" : "text-[#19322F] bg-white/90 hover:bg-[#006655] hover:text-white"
+            activeIsFavorite ? "text-red-500 bg-white" : "text-[#19322F] bg-white/90 hover:bg-[#006655] hover:text-white"
           }`}
-          title={isFavorite ? "Eliminar de favoritas" : "Agregar a favoritas"}
+          title={activeIsFavorite ? "Eliminar de favoritas" : "Agregar a favoritas"}
         >
-          <Heart className={`w-5 h-5 ${isFavorite ? "fill-current" : ""}`} />
+          <Heart className={`w-5 h-5 ${activeIsFavorite ? "fill-current" : ""}`} />
         </button>
 
         <Link href={`/properties/${targetKey}`} className="block h-full">
@@ -143,12 +152,13 @@ export function PropertyCard({
       <button
         type="button"
         onClick={handleToggleFavorite}
+        suppressHydrationWarning
         className={`absolute top-3 right-3 p-2 w-9 h-9 rounded-full backdrop-blur-sm transition-all cursor-pointer z-30 shadow-md flex items-center justify-center ${
-          isFavorite ? "text-red-500 bg-white" : "text-[#19322F] bg-white/90 hover:bg-[#006655] hover:text-white"
+          activeIsFavorite ? "text-red-500 bg-white" : "text-[#19322F] bg-white/90 hover:bg-[#006655] hover:text-white"
         }`}
-        title={isFavorite ? "Eliminar de favoritas" : "Agregar a favoritas"}
+        title={activeIsFavorite ? "Eliminar de favoritas" : "Agregar a favoritas"}
       >
-        <Heart className={`w-4 h-4 ${isFavorite ? "fill-current" : ""}`} />
+        <Heart className={`w-4 h-4 ${activeIsFavorite ? "fill-current" : ""}`} />
       </button>
 
       <Link href={`/properties/${targetKey}`} className="block h-full">
