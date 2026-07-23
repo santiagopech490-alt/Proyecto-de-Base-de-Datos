@@ -47,26 +47,23 @@ export function AddPropertyForm({ userId }: { userId: string }) {
       const bathsNum = parseFloat(formData.baths) || 2;
       const sqftNum = parseInt(formData.sqft) || 2000;
       const garageNum = parseInt(formData.garage || '0');
+      const validImage = formData.imageUrl.trim() || 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop';
 
+      // Payload strictly conforming to Supabase properties schema
       const supabasePayload = {
         title: formData.title,
+        slug: slug,
         description: formData.description,
         price: priceNum,
         address: formData.location,
-        location: formData.location,
         city: formData.location.split(',')[0] || formData.location || 'Beverly Hills',
-        neighborhood: 'District Luxe',
         bedrooms: bedsNum,
-        beds: bedsNum,
         bathrooms: bathsNum,
-        baths: bathsNum,
         sqft: sqftNum,
         garage: garageNum,
-        images: [formData.imageUrl || 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop'],
-        slug: slug,
+        images: [validImage],
         status: 'active',
-        owner_id: (userId && userId.length > 20) ? userId : null,
-        created_at: new Date().toISOString()
+        listing_status: 'For Sale'
       };
 
       // 1. Direct Supabase DB Insertion
@@ -81,6 +78,7 @@ export function AddPropertyForm({ userId }: { userId: string }) {
           console.warn("Supabase insert notice:", error.message || error);
         } else if (data && data.length > 0) {
           dbInsertedProp = data[0];
+          console.log("Successfully inserted into Supabase DB:", dbInsertedProp);
         }
       } catch (dbErr) {
         console.warn("Supabase insert caught exception:", dbErr);
@@ -89,6 +87,9 @@ export function AddPropertyForm({ userId }: { userId: string }) {
       // 2. Save locally for instant rendering & fallback
       const finalProp = dbInsertedProp || {
         ...supabasePayload,
+        location: formData.location,
+        beds: bedsNum,
+        baths: bathsNum,
         id: 'prop-' + Date.now()
       };
 
