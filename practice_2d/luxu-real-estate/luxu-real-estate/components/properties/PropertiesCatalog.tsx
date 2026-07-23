@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Building2 } from 'lucide-react';
+import { Search, Building2, Layers } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { FiltersModal } from '@/components/search/FiltersModal';
 import { PropertyCard } from '@/components/property-card';
@@ -15,7 +16,7 @@ interface PropertiesCatalogProps {
 }
 
 export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { filters, setFilter, clearFilters } = usePropertyFilters();
   const [searchQuery, setSearchQuery] = useState(filters.location || '');
   const [allProperties, setAllProperties] = useState<Property[]>(initialProperties);
@@ -47,6 +48,19 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
     setFilter('location', searchQuery.trim());
   };
 
+  // Dynamic category counts across the entire NoSQL dataset
+  const counts = useMemo(() => {
+    return {
+      all: allProperties.length,
+      houses: allProperties.filter(p => (p.title || '').toLowerCase().includes('casa')).length,
+      apartments: allProperties.filter(p => (p.title || '').toLowerCase().includes('departamento')).length,
+      villas: allProperties.filter(p => (p.title || '').toLowerCase().includes('villa')).length,
+      penthouses: allProperties.filter(p => (p.title || '').toLowerCase().includes('penthouse')).length,
+      rent: allProperties.filter(p => (p.status || '').toLowerCase().includes('rent') || p.price < 10000).length,
+      sale: allProperties.filter(p => (p.status || '').toLowerCase().includes('sale') || (p.status || '').toLowerCase().includes('active') || p.price >= 10000).length,
+    };
+  }, [allProperties]);
+
   const filteredProperties = useMemo(() => {
     return allProperties.filter((property) => {
       // 1. Text Search filter (title, location, description, address)
@@ -77,7 +91,7 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
         } else if (requestedType === 'sale' || requestedType === 'venta') {
           const isForSale = propStatus.includes('sale') || propStatus.includes('active') || property.price >= 10000;
           if (!isForSale) return false;
-        } else if (['house', 'apartment', 'villa', 'condo', 'penthouse'].includes(requestedType)) {
+        } else if (['house', 'casa', 'apartment', 'departamento', 'villa', 'condo', 'penthouse'].includes(requestedType)) {
           if (!propTitle.includes(requestedType) && !propStatus.includes(requestedType)) return false;
         }
       }
@@ -104,11 +118,18 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
       {/* Search Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-1">
-          <h1 className="text-4xl font-bold text-[#19322F] tracking-tight">
-            {filters.type === 'rent' ? 'Propiedades en Renta' : t("properties.availableProperties")}
-          </h1>
-          <p className="text-muted-foreground">
-            {filters.type === 'rent' ? 'Explora departamentos y residencias en alquiler exclusivo.' : t("properties.availableSubtitle")}
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl md:text-4xl font-bold text-[#19322F] tracking-tight">
+              {filters.type === 'rent' ? 'Propiedades en Renta' : t("properties.availableProperties")}
+            </h1>
+            <Badge className="bg-emerald-100 text-[#006655] font-bold text-xs px-3 py-1 rounded-full border-none shadow-xs">
+              {filteredProperties.length} {language === 'es' ? 'disponibles' : 'available'}
+            </Badge>
+          </div>
+          <p className="text-muted-foreground text-sm">
+            {filters.type === 'rent' 
+              ? `Explora ${counts.rent} departamentos y residencias exclusivas en alquiler.` 
+              : `Mostrando ${filteredProperties.length} de un total de ${counts.all} inmuebles registrados.`}
           </p>
         </div>
         
@@ -127,6 +148,81 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
           </div>
           <FiltersModal />
         </form>
+      </div>
+
+      {/* Quick Category Counter Pills */}
+      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+        <button
+          onClick={() => { setFilter('type', 'all'); setSearchQuery(''); }}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            (!filters.type || filters.type === 'all') && !searchQuery
+              ? 'bg-[#19322F] text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <span>{language === 'es' ? 'Todas' : 'All'}</span>
+          <span className="opacity-80">({counts.all})</span>
+        </button>
+
+        <button
+          onClick={() => setFilter('type', 'casa')}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            filters.type === 'casa'
+              ? 'bg-[#006655] text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <span>{language === 'es' ? 'Casas' : 'Houses'}</span>
+          <span className="opacity-80">({counts.houses})</span>
+        </button>
+
+        <button
+          onClick={() => setFilter('type', 'departamento')}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            filters.type === 'departamento'
+              ? 'bg-[#006655] text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <span>{language === 'es' ? 'Departamentos' : 'Apartments'}</span>
+          <span className="opacity-80">({counts.apartments})</span>
+        </button>
+
+        <button
+          onClick={() => setFilter('type', 'villa')}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            filters.type === 'villa'
+              ? 'bg-[#006655] text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <span>Villas</span>
+          <span className="opacity-80">({counts.villas})</span>
+        </button>
+
+        <button
+          onClick={() => setFilter('type', 'penthouse')}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            filters.type === 'penthouse'
+              ? 'bg-[#006655] text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <span>Penthouses</span>
+          <span className="opacity-80">({counts.penthouses})</span>
+        </button>
+
+        <button
+          onClick={() => setFilter('type', 'rent')}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            filters.type === 'rent'
+              ? 'bg-[#006655] text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <span>{language === 'es' ? 'En Renta' : 'For Rent'}</span>
+          <span className="opacity-80">({counts.rent})</span>
+        </button>
       </div>
 
       {/* Grid or Empty State */}
@@ -165,9 +261,9 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
               setSearchQuery('');
               clearFilters();
             }}
-            className="bg-[#006655] hover:bg-[#005544] text-white px-6 py-2.5 rounded-xl cursor-pointer"
+            className="bg-[#006655] hover:bg-[#005544] text-white px-6 py-2.5 rounded-xl cursor-pointer font-bold"
           >
-            Ver todas las propiedades
+            Ver todas las propiedades ({counts.all})
           </Button>
         </div>
       )}
