@@ -1,6 +1,6 @@
 import { Property } from '@/types/property';
 import { supabase } from '@/lib/supabase';
-import { getNoSQLCatalogProperties } from '@/lib/nosql-properties';
+import { getRealNoSQLProperties } from '@/lib/nosql-dataset-reader';
 
 // Mock data for local development/demo
 const mockProperties: Property[] = [
@@ -40,102 +40,6 @@ const mockProperties: Property[] = [
     ], 
     agentId: 'user123', 
     status: 'active' 
-  },
-  { 
-    id: '3', 
-    slug: 'modern-family-home', 
-    title: 'Residencia Familiar Moderna', 
-    price: 850000, 
-    location: '123 Pine St, Seattle', 
-    beds: 3, 
-    baths: 2, 
-    sqft: 1200, 
-    garage: 1, 
-    description: 'Beautiful modern family home in a great neighborhood.', 
-    amenities: ['Garage', 'Garden'], 
-    images: ['https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop'], 
-    agentId: 'user123', 
-    status: 'FOR SALE' 
-  },
-  { 
-    id: '4', 
-    slug: 'urban-loft', 
-    title: 'Urban Loft Exclusivo', 
-    price: 3200, 
-    location: '456 Elm Ave, Portland', 
-    beds: 1, 
-    baths: 1, 
-    sqft: 850, 
-    garage: 0, 
-    description: 'Chic urban loft in the heart of the city.', 
-    amenities: ['Gym', 'Elevator'], 
-    images: ['https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&auto=format&fit=crop'], 
-    agentId: 'user123', 
-    status: 'FOR RENT' 
-  },
-  { 
-    id: '5', 
-    slug: 'highland-retreat', 
-    title: 'Refugio Highland', 
-    price: 620000, 
-    location: '789 Mountain Rd, Bend', 
-    beds: 2, 
-    baths: 2, 
-    sqft: 980, 
-    garage: 1, 
-    description: 'Quiet retreat in the mountains.', 
-    amenities: ['View', 'Patio'], 
-    images: ['https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&auto=format&fit=crop'], 
-    agentId: 'user123', 
-    status: 'FOR SALE' 
-  },
-  { 
-    id: '6', 
-    slug: 'sea-view-penthouse', 
-    title: 'Penthouse Vista al Mar', 
-    price: 4500, 
-    location: '321 Ocean Dr, Miami', 
-    beds: 3, 
-    baths: 3, 
-    sqft: 1800, 
-    garage: 2, 
-    description: 'Stunning sea view penthouse.', 
-    amenities: ['Pool', 'Terrace'], 
-    images: ['https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop'], 
-    agentId: 'user123', 
-    status: 'FOR RENT' 
-  },
-  { 
-    id: '7', 
-    slug: 'central-studio', 
-    title: 'Estudio Central de Lujo', 
-    price: 550000, 
-    location: '555 Main St, Chicago', 
-    beds: 1, 
-    baths: 1, 
-    sqft: 500, 
-    garage: 0, 
-    description: 'Cozy studio in the city center.', 
-    amenities: ['WiFi', 'AC'], 
-    images: ['https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&auto=format&fit=crop'], 
-    agentId: 'user123', 
-    status: 'FOR SALE' 
-  },
-  { 
-    id: '8', 
-    slug: 'garden-villa', 
-    title: 'Villa con Jardín Privado', 
-    price: 2800, 
-    location: '999 Oak Ln, Austin', 
-    beds: 4, 
-    baths: 3, 
-    sqft: 2200, 
-    garage: 2, 
-    description: 'Spacious villa with a large garden.', 
-    amenities: ['Garden', 'Pool'], 
-    images: ['https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&auto=format&fit=crop'], 
-    agentId: 'user123', 
-    status: 'FOR RENT' 
   }
 ];
 
@@ -160,8 +64,8 @@ export async function getAllProperties(): Promise<Property[]> {
     console.warn('Supabase unreachable, using fallback properties:', err);
   }
 
-  const noSqlCatalog = getNoSQLCatalogProperties();
-  const allMerged = [...dbProps, ...mockProperties, ...noSqlCatalog];
+  const realNoSqlProps = getRealNoSQLProperties();
+  const allMerged = [...dbProps, ...realNoSqlProps, ...mockProperties];
 
   const seenIds = new Set<string>();
   const seenSlugs = new Set<string>();
