@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { Search, SlidersHorizontal, Building2 } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Search, Building2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
@@ -18,9 +18,27 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
   const { t } = useLanguage();
   const { filters, setFilter, clearFilters } = usePropertyFilters();
   const [searchQuery, setSearchQuery] = useState(filters.location || '');
+  const [allProperties, setAllProperties] = useState<Property[]>(initialProperties);
 
-  // Keep local input in sync with URL filter if changed elsewhere
-  React.useEffect(() => {
+  // Merge custom properties created in Admin Panel from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('luxe_custom_properties');
+      if (saved) {
+        try {
+          const customProps: Property[] = JSON.parse(saved);
+          const initialIds = new Set(initialProperties.map(p => p.id));
+          const uniqueCustoms = customProps.filter(cp => !initialIds.has(cp.id));
+          setAllProperties([...uniqueCustoms, ...initialProperties]);
+          return;
+        } catch {}
+      }
+    }
+    setAllProperties(initialProperties);
+  }, [initialProperties]);
+
+  // Sync search query if changed in URL
+  useEffect(() => {
     setSearchQuery(filters.location || '');
   }, [filters.location]);
 
@@ -30,7 +48,7 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
   };
 
   const filteredProperties = useMemo(() => {
-    return initialProperties.filter((property) => {
+    return allProperties.filter((property) => {
       // 1. Text Search filter (title, location, description, address)
       const query = (filters.location || searchQuery).toLowerCase().trim();
       if (query) {
@@ -75,7 +93,7 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
 
       return true;
     });
-  }, [initialProperties, filters, searchQuery]);
+  }, [allProperties, filters, searchQuery]);
 
   return (
     <div className="space-y-8">
