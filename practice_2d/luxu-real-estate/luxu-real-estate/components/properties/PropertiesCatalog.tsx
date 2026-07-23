@@ -65,16 +65,20 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
       if (filters.minPrice && property.price < filters.minPrice) return false;
       if (filters.maxPrice && property.price > filters.maxPrice) return false;
 
-      // 3. Property Type filter
+      // 3. Property Type / Rent / Sale filter
       if (filters.type && filters.type !== 'all') {
-        const propType = (property.status || '').toLowerCase();
+        const propStatus = (property.status || '').toLowerCase();
         const propTitle = (property.title || '').toLowerCase();
         const requestedType = filters.type.toLowerCase();
-        
-        if (requestedType === 'rent' && !propType.includes('rent')) return false;
-        if (requestedType === 'sale' && !propType.includes('sale') && !propType.includes('active')) return false;
-        if (['house', 'apartment', 'villa', 'condo', 'penthouse'].includes(requestedType)) {
-          if (!propTitle.includes(requestedType) && !propType.includes(requestedType)) return false;
+
+        if (requestedType === 'rent' || requestedType === 'renta') {
+          const isForRent = propStatus.includes('rent') || propTitle.includes('loft') || propTitle.includes('rent') || propTitle.includes('penthouse') || property.price < 10000;
+          if (!isForRent) return false;
+        } else if (requestedType === 'sale' || requestedType === 'venta') {
+          const isForSale = propStatus.includes('sale') || propStatus.includes('active') || property.price >= 10000;
+          if (!isForSale) return false;
+        } else if (['house', 'apartment', 'villa', 'condo', 'penthouse'].includes(requestedType)) {
+          if (!propTitle.includes(requestedType) && !propStatus.includes(requestedType)) return false;
         }
       }
 
@@ -100,8 +104,12 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
       {/* Search Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-1">
-          <h1 className="text-4xl font-bold text-[#19322F] tracking-tight">{t("properties.availableProperties")}</h1>
-          <p className="text-muted-foreground">{t("properties.availableSubtitle")}</p>
+          <h1 className="text-4xl font-bold text-[#19322F] tracking-tight">
+            {filters.type === 'rent' ? 'Propiedades en Renta' : t("properties.availableProperties")}
+          </h1>
+          <p className="text-muted-foreground">
+            {filters.type === 'rent' ? 'Explora departamentos y residencias en alquiler exclusivo.' : t("properties.availableSubtitle")}
+          </p>
         </div>
         
         <form onSubmit={handleSearchSubmit} className="flex items-center gap-3">
@@ -131,12 +139,12 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
               slug={property.slug}
               title={property.title}
               location={property.location}
-              price={`$${(property.price || 0).toLocaleString('en-US')}`}
+              price={`$${(property.price || 0).toLocaleString('en-US')}${filters.type === 'rent' || (property.status || '').toLowerCase().includes('rent') ? '/mes' : ''}`}
               beds={property.beds}
               baths={property.baths}
               area={`${(property.sqft || 0).toLocaleString('en-US')} m²`}
               imageUrl={(property.images && property.images.length > 0) ? property.images[0] : 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop'}
-              status={(property.status || 'active').toUpperCase()}
+              status={filters.type === 'rent' ? 'FOR RENT' : (property.status || 'active').toUpperCase()}
             />
           ))}
         </div>
