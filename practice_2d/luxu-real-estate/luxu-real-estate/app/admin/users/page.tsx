@@ -1,40 +1,35 @@
 'use client';
+
 import * as React from 'react';
 import { fetchUserProfiles } from "@/lib/user-service";
 import { UserDirectoryFilter } from "@/components/UserDirectoryFilter";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { AddUserForm } from "@/components/AddUserForm";
 import { createClient } from "@/lib/supabase/client";
-import { LoginRequired } from "@/components/LoginRequired";
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 export default function UserDirectoryPage() {
   const { t } = useLanguage();
-  const [user, setUser] = React.useState<any>(null);
-  const [checkingAuth, setCheckingAuth] = React.useState(true);
   const [users, setUsers] = React.useState<any[]>([]);
   const [isAddUserOpen, setIsAddUserOpen] = React.useState(false);
   const supabase = createClient();
 
   React.useEffect(() => {
     async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      setCheckingAuth(false);
-      
-      const profiles = await fetchUserProfiles();
-      setUsers(profiles);
+      try {
+        const profiles = await fetchUserProfiles();
+        setUsers(profiles || []);
+      } catch (err) {
+        console.warn("Notice loading user profiles:", err);
+      }
     }
     loadData();
   }, [supabase]);
 
-  if (checkingAuth) return <div className="p-8">Loading...</div>;
-
   return (
-    <main className="min-h-screen bg-[#F8FAFB] p-8">
+    <main className="min-h-screen bg-[#F8FAFB] pt-24 pb-16 px-8">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
