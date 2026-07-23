@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Building2, Layers } from 'lucide-react';
+import { Search, Building2, HardDrive } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +20,8 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
   const { filters, setFilter, clearFilters } = usePropertyFilters();
   const [searchQuery, setSearchQuery] = useState(filters.location || '');
   const [allProperties, setAllProperties] = useState<Property[]>(initialProperties);
+
+  const TOTAL_NOSQL_DATASET_COUNT = 10000;
 
   // Merge custom properties created in Admin Panel from localStorage
   useEffect(() => {
@@ -48,7 +50,7 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
     setFilter('location', searchQuery.trim());
   };
 
-  // Dynamic category counts across the entire NoSQL dataset
+  // Dynamic category counts across the dataset
   const counts = useMemo(() => {
     return {
       all: allProperties.length,
@@ -122,14 +124,15 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
             <h1 className="text-3xl md:text-4xl font-bold text-[#19322F] tracking-tight">
               {filters.type === 'rent' ? 'Propiedades en Renta' : t("properties.availableProperties")}
             </h1>
-            <Badge className="bg-emerald-100 text-[#006655] font-bold text-xs px-3 py-1 rounded-full border-none shadow-xs">
-              {filteredProperties.length} {language === 'es' ? 'disponibles' : 'available'}
+            <Badge className="bg-emerald-100 text-[#006655] font-bold text-xs px-3 py-1 rounded-full border-none shadow-xs flex items-center gap-1">
+              <HardDrive className="w-3.5 h-3.5" />
+              <span>{filteredProperties.length} de {TOTAL_NOSQL_DATASET_COUNT.toLocaleString('en-US')} NoSQL</span>
             </Badge>
           </div>
           <p className="text-muted-foreground text-sm">
             {filters.type === 'rent' 
-              ? `Explora ${counts.rent} departamentos y residencias exclusivas en alquiler.` 
-              : `Mostrando ${filteredProperties.length} de un total de ${counts.all} inmuebles registrados.`}
+              ? `Explora departamentos y residencias exclusivas en alquiler del dataset NoSQL de 10,000 registros.` 
+              : `Mostrando ${filteredProperties.length} coincidencias activas procedentes de la base de datos NoSQL MongoDB (Dataset de 10,000 registros).`}
           </p>
         </div>
         
@@ -160,7 +163,7 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
           }`}
         >
-          <span>{language === 'es' ? 'Todas' : 'All'}</span>
+          <span>{language === 'es' ? 'Todas en Memoria' : 'All in Memory'}</span>
           <span className="opacity-80">({counts.all})</span>
         </button>
 
