@@ -1,82 +1,69 @@
-"use client";
+'use client';
 
-import { useEffect, useState, useMemo } from "react";
-import Link from "next/link";
-import { usePathname, useSearchParams, useRouter } from "next/navigation";
-import { Search, Bell, Menu, Building2, User, Check, Calendar, Sparkles, Home, Shield, UserCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Building2, Search, Bell, Shield, UserCheck, Check, Globe } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { Separator } from "@/components/ui/separator";
-import { createClient } from "@/lib/supabase/client";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-
-import { useLanguage } from "@/lib/i18n/LanguageContext";
-import { Globe } from "lucide-react";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Separator } from '@/components/ui/separator';
+import { createClient } from '@/lib/supabase/client';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 export function Navbar() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [userRole, setUserRole] = useState<'Admin' | 'Cliente'>('Admin');
-  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(true);
-  const [notificationsList, setNotificationsList] = useState<any[]>([
+  const [notifications, setNotifications] = useState([
     {
       id: '1',
-      title: '¡Visita Confirmada!',
-      desc: 'Tu cita para recorrer la propiedad ha sido agendada con éxito.',
+      title: 'Nueva Cita Solicitada',
+      desc: 'El cliente María García solicitó una visita para Villa in Aspen #1',
       time: 'Hace 10 min',
-      icon: Calendar,
       unread: true,
+      icon: Building2
     },
     {
       id: '2',
-      title: 'Nueva Propiedad Disponible',
-      desc: 'Se ha publicado una nueva mansión exclusiva en Beverly Hills.',
+      title: 'Propiedad Favorita Actualizada',
+      desc: 'El precio de The Glass Pavilion bajó un 5%',
       time: 'Hace 1 hora',
-      icon: Home,
       unread: true,
-    },
-    {
-      id: '3',
-      title: 'Bienvenido a LuxeEstate',
-      desc: 'Explora el catálogo exclusivo y guarda tus propiedades favoritas.',
-      time: 'Hace 1 día',
-      icon: Sparkles,
-      unread: false,
+      icon: Bell
     }
   ]);
+  const supabase = createClient();
+  const { t, language, setLanguage } = useLanguage();
 
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
-  const { language, setLanguage, t } = useLanguage();
-
-  // Define Links and Role Access
-  const navLinks = [
-    { label: t("nav.buy"), href: "/properties", role: "all" },
-    { label: t("nav.rent"), href: "/properties?type=rent", role: "all" },
-    { label: t("nav.savedHomes"), href: "/favorites", role: "all" },
-    { label: t("nav.dashboard"), href: "/admin/properties", role: "admin" },
-    { label: t("nav.sell"), href: "/admin/properties/add", role: "admin" },
-    { label: t("nav.users"), href: "/users", role: "admin" },
-  ];
-
+  // Handle role switching
   useEffect(() => {
-    // Restore saved role preference
     if (typeof window !== 'undefined') {
-      const savedRole = localStorage.getItem('luxe_active_role');
-      if (savedRole === 'Cliente' || savedRole === 'Admin') {
+      const savedRole = localStorage.getItem('luxe_active_role') as 'Admin' | 'Cliente';
+      if (savedRole) {
         setUserRole(savedRole);
       }
     }
+  }, []);
 
+  const toggleUserRole = (newRole: 'Admin' | 'Cliente') => {
+    setUserRole(newRole);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('luxe_active_role', newRole);
+      window.dispatchEvent(new Event('luxe_role_changed'));
+    }
+  };
+
+  useEffect(() => {
     async function fetchUserData() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -88,24 +75,28 @@ export function Navbar() {
             .eq('id', user.id)
             .single();
           setProfile(profile);
-          if (profile?.role) {
-            const parsedRole = profile.role.toLowerCase().includes('admin') ? 'Admin' : 'Cliente';
-            setUserRole(parsedRole);
-          }
           return;
         }
       } catch (err) {
-        console.warn("Supabase auth unavailable:", err);
+        console.warn("Auth check in Navbar:", err);
       }
 
-      // Check local demo user session
-      const demoStr = typeof window !== 'undefined' ? localStorage.getItem('luxe_demo_user') : null;
-      if (demoStr) {
+      // Check local demo session
+      const demoStr = localStorage.getItem('luxe_demo_user');
+      const demoAuthCookie = typeof document !== 'undefined' && document.cookie.includes('luxe_auth=true');
+
+      if (demoStr || demoAuthCookie) {
         try {
-          const demoObj = JSON.parse(demoStr);
-          setUser(demoObj.user);
-          setProfile(demoObj.profile);
-        } catch {}
+          const demoObj = demoStr ? JSON.parse(demoStr) : null;
+          setUser(demoObj?.user || { id: 'demo-user', email: 'demo.admin@gmail.com' });
+          setProfile(demoObj?.profile || { full_name: 'Administrador Luxe', role: 'Admin' });
+        } catch {
+          setUser({ id: 'demo-user', email: 'demo.admin@gmail.com' });
+          setProfile({ full_name: 'Administrador Luxe', role: 'Admin' });
+        }
+      } else {
+        setUser(null);
+        setProfile(null);
       }
     }
     
@@ -159,22 +150,22 @@ export function Navbar() {
   };
 
   const markAllNotificationsAsRead = () => {
-    setHasUnreadNotifications(false);
-    setNotificationsList(prev => prev.map(n => ({ ...n, unread: false })));
+    setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
   };
 
-  const toggleUserRole = (newRole: 'Admin' | 'Cliente') => {
-    setUserRole(newRole);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('luxe_active_role', newRole);
-    }
-  };
+  const hasUnreadNotifications = notifications.some(n => n.unread);
 
-  const visibleLinks = navLinks.filter(link => {
-    if (link.role === 'all') return true;
-    if (link.role === 'admin' && userRole === 'Admin') return true;
-    return false;
-  });
+  // Dynamic Navigation Links based on User Role (RBAC)
+  const navLinks = [
+    { href: '/properties', label: t("nav.buy"), roles: ['Admin', 'Cliente'] },
+    { href: '/properties?type=rent', label: t("nav.rent"), roles: ['Admin', 'Cliente'] },
+    { href: '/favorites', label: language === 'es' ? 'Favoritos' : 'Favorites', roles: ['Admin', 'Cliente'] },
+    { href: '/admin/properties', label: language === 'es' ? 'Panel Control' : 'Dashboard', roles: ['Admin'] },
+    { href: '/admin/properties/new', label: language === 'es' ? 'Publicar Inmueble' : 'Sell', roles: ['Admin'] },
+    { href: '/admin/users', label: language === 'es' ? 'Usuarios' : 'Users', roles: ['Admin'] },
+  ];
+
+  const visibleLinks = navLinks.filter(link => link.roles.includes(userRole));
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-[#19322F]/5 bg-white/80 backdrop-blur-md">
@@ -259,12 +250,11 @@ export function Navbar() {
                   </button>
                 )}
               </div>
-              <DropdownMenuSeparator />
-              <div className="space-y-2 py-1 max-h-72 overflow-y-auto">
-                {notificationsList.map((item) => (
+              <div className="space-y-2">
+                {notifications.map((item) => (
                   <div 
-                    key={item.id} 
-                    className={`p-3 rounded-xl transition-colors flex gap-3 items-start ${
+                    key={item.id}
+                    className={`p-2.5 rounded-xl transition-colors flex items-start gap-3 cursor-pointer ${
                       item.unread ? 'bg-emerald-50/60 border border-emerald-100' : 'hover:bg-slate-50'
                     }`}
                   >
@@ -349,12 +339,20 @@ export function Navbar() {
                 </DropdownMenuItem>
                 
                 {userRole === 'Admin' && (
-                  <DropdownMenuItem 
-                    onClick={() => router.push('/admin/properties')} 
-                    className="cursor-pointer font-medium p-2 hover:bg-slate-100 rounded-lg text-xs text-[#006655]"
-                  >
-                    {t("nav.dashboard")}
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem 
+                      onClick={() => router.push('/admin/properties')} 
+                      className="cursor-pointer font-medium p-2 hover:bg-slate-100 rounded-lg text-xs text-[#006655]"
+                    >
+                      {t("nav.dashboard")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => router.push('/admin/database')} 
+                      className="cursor-pointer font-medium p-2 hover:bg-slate-100 rounded-lg text-xs text-blue-700"
+                    >
+                      🗄️ Diagnóstico BD (Objetos)
+                    </DropdownMenuItem>
+                  </>
                 )}
 
                 <DropdownMenuItem 
@@ -366,47 +364,19 @@ export function Navbar() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center space-x-2 sm:space-x-3">
               <Link href="/auth/login">
-                <Button variant="ghost" className="text-xs font-semibold text-[#19322F] hover:text-[#006655] cursor-pointer">
+                <Button variant="ghost" size="sm" className="text-[#19322F] font-medium hover:text-[#006655] cursor-pointer text-xs sm:text-sm">
                   {t("nav.signIn")}
                 </Button>
               </Link>
-              <Link href="/auth/login">
-                <Button className="bg-[#006655] hover:bg-[#005544] text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-md shadow-[#006655]/20 cursor-pointer">
-                  Acceso Demo
+              <Link href="/auth/register">
+                <Button size="sm" className="bg-[#006655] hover:bg-[#005544] text-white font-medium shadow-md shadow-[#006655]/20 cursor-pointer text-xs sm:text-sm">
+                  {t("nav.register")}
                 </Button>
               </Link>
             </div>
           )}
-
-          {/* Mobile Menu Button */}
-          <Sheet>
-            <SheetTrigger render={
-              <Button variant="ghost" size="icon" className="md:hidden text-[#19322F] cursor-pointer">
-                <Menu className="w-6 h-6" />
-              </Button>
-            } />
-            <SheetContent side="right" className="w-72 bg-white">
-              <SheetHeader className="text-left border-b pb-4">
-                <SheetTitle className="flex items-center space-x-2">
-                  <Building2 className="w-6 h-6 text-[#006655]" />
-                  <span className="font-bold text-lg text-[#19322F]">LuxeEstate</span>
-                </SheetTitle>
-              </SheetHeader>
-              <div className="flex flex-col space-y-4 pt-6">
-                {visibleLinks.map((link) => (
-                  <Link
-                    key={link.label}
-                    href={link.href}
-                    className="text-base font-medium text-[#19322F] hover:text-[#006655] transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-            </SheetContent>
-          </Sheet>
         </div>
       </div>
     </header>
