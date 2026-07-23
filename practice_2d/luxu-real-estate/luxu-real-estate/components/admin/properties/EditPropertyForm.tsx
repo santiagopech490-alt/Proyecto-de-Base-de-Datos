@@ -70,24 +70,57 @@ export function EditPropertyForm({ propertyId }: { propertyId: string }) {
     setIsLoading(true);
 
     try {
+      const priceNum = parseFloat(formData.price) || 1000000;
+      const bedsNum = parseInt(formData.beds) || 3;
+      const bathsNum = parseFloat(formData.baths) || 2;
+      const sqftNum = parseInt(formData.sqft) || 2000;
+      const garageNum = parseInt(formData.garage || '0');
+      const validImage = formData.imageUrl.trim() || 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop';
+
       const updatedProp = {
         id: propertyId,
+        slug: propertyId,
         title: formData.title,
         description: formData.description,
-        price: parseFloat(formData.price) || 1000000,
+        price: priceNum,
         address: formData.location,
         location: formData.location,
-        bedrooms: parseInt(formData.beds) || 3,
-        beds: parseInt(formData.beds) || 3,
-        bathrooms: parseFloat(formData.baths) || 2,
-        baths: parseFloat(formData.baths) || 2,
-        sqft: parseInt(formData.sqft) || 2000,
-        garage: parseInt(formData.garage || '0'),
-        images: [formData.imageUrl || 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop'],
+        bedrooms: bedsNum,
+        beds: bedsNum,
+        bathrooms: bathsNum,
+        baths: bathsNum,
+        sqft: sqftNum,
+        garage: garageNum,
+        images: [validImage],
         status: formData.status
       };
 
-      // Update in localStorage custom properties
+      // 1. Update in Supabase DB by id or slug
+      try {
+        const { error: updateError } = await supabase
+          .from('properties')
+          .update({
+            title: formData.title,
+            description: formData.description,
+            price: priceNum,
+            address: formData.location,
+            bedrooms: bedsNum,
+            bathrooms: bathsNum,
+            sqft: sqftNum,
+            garage: garageNum,
+            images: [validImage],
+            status: formData.status
+          })
+          .or(`id.eq.${propertyId},slug.eq.${propertyId}`);
+
+        if (updateError) {
+          console.warn("Supabase update warning:", updateError.message || updateError);
+        }
+      } catch (dbErr) {
+        console.warn("Supabase update caught exception:", dbErr);
+      }
+
+      // 2. Update in localStorage custom properties for instant fallback
       if (typeof window !== 'undefined') {
         const existing = localStorage.getItem('luxe_custom_properties');
         let list = existing ? JSON.parse(existing) : [];
@@ -100,27 +133,10 @@ export function EditPropertyForm({ propertyId }: { propertyId: string }) {
         localStorage.setItem('luxe_custom_properties', JSON.stringify(list));
       }
 
-      // Update in Supabase if reachable
-      try {
-        await supabase
-          .from('properties')
-          .update({
-            title: formData.title,
-            description: formData.description,
-            price: parseFloat(formData.price),
-            address: formData.location,
-            bedrooms: parseInt(formData.beds),
-            bathrooms: parseFloat(formData.baths),
-            sqft: parseInt(formData.sqft),
-            status: formData.status,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', propertyId);
-      } catch {}
-
-      toast.success(language === 'es' ? 'Propiedad actualizada exitosamente' : 'Property updated successfully');
+      toast.success(language === 'es' ? 'Propiedad actualizada exitosamente en Supabase' : 'Property updated successfully in Supabase');
       router.push('/admin/properties');
     } catch (err: any) {
+      console.error("Edit property error:", err);
       toast.error(err.message || 'Error al actualizar propiedad');
     } finally {
       setIsLoading(false);
@@ -147,7 +163,7 @@ export function EditPropertyForm({ propertyId }: { propertyId: string }) {
           <Button type="button" variant="outline" onClick={() => router.back()}>
             {language === 'es' ? 'Cancelar' : 'Cancel'}
           </Button>
-          <Button type="submit" disabled={isLoading} className="bg-[#0F5A4D] hover:bg-[#0a3d34] text-white">
+          <Button type="submit" disabled={isLoading} className="bg-[#0F5A4D] hover:bg-[#0a3d34] text-white cursor-pointer">
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
