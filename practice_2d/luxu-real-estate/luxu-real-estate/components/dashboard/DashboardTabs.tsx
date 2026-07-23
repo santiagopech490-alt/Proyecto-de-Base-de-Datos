@@ -20,19 +20,19 @@ const DashboardTabs: React.FC<DashboardTabsProps> = ({ children }) => {
       <TabsList className="bg-transparent border-b border-slate-200 w-full justify-start rounded-none h-auto p-0 mb-8 gap-8">
         <TabsTrigger 
           value="saved" 
-          className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 pb-4 text-slate-500 font-semibold transition-all hover:text-slate-700 cursor-pointer"
+          className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-2 pb-4 text-slate-500 font-semibold transition-all hover:text-slate-700 cursor-pointer"
         >
           {t("profile.savedProperties")}
         </TabsTrigger>
         <TabsTrigger 
           value="visits" 
-          className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 pb-4 text-slate-500 font-semibold transition-all hover:text-slate-700 cursor-pointer"
+          className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-2 pb-4 text-slate-500 font-semibold transition-all hover:text-slate-700 cursor-pointer"
         >
           {t("profile.scheduledVisits")}
         </TabsTrigger>
         <TabsTrigger 
           value="settings" 
-          className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-0 pb-4 text-slate-500 font-semibold transition-all hover:text-slate-700 cursor-pointer"
+          className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#006655] data-[state=active]:bg-transparent data-[state=active]:text-[#006655] px-2 pb-4 text-slate-500 font-semibold transition-all hover:text-slate-700 cursor-pointer"
         >
           {t("profile.preferencesSettings")}
         </TabsTrigger>

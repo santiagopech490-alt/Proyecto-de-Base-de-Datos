@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 
@@ -12,8 +12,26 @@ interface QuickStatsProps {
   };
 }
 
-const QuickStats: React.FC<QuickStatsProps> = ({ stats }) => {
+const QuickStats: React.FC<QuickStatsProps> = ({ stats: initialStats }) => {
   const { t } = useLanguage();
+  const [stats, setStats] = useState(initialStats);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const favStr = localStorage.getItem('user_favorites');
+    const favCount = favStr ? (JSON.parse(favStr) || []).length : initialStats.saved;
+
+    const visitStr = localStorage.getItem('luxe_user_appointments');
+    const visitCount = visitStr ? (JSON.parse(visitStr) || []).length : initialStats.visits;
+
+    setStats({
+      saved: Math.max(initialStats.saved, favCount),
+      visits: Math.max(initialStats.visits, visitCount),
+      sold: initialStats.sold || 5,
+    });
+  }, [initialStats]);
+
   const formatNumber = (num: number) => num < 10 ? `0${num}` : num.toString();
 
   const statItems = [
@@ -35,7 +53,7 @@ const QuickStats: React.FC<QuickStatsProps> = ({ stats }) => {
             <span className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1">
               {item.value}
             </span>
-            <span className="text-[9px] sm:text-[10px] font-bold text-emerald-700 tracking-widest uppercase">
+            <span className="text-[9px] sm:text-[10px] font-bold text-[#006655] tracking-widest uppercase">
               {item.label}
             </span>
           </div>
