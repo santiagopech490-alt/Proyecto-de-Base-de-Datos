@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { Search, Bell, Menu, Building2, User } from "lucide-react";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
+import { Search, Bell, Menu, Building2, User, Check, Calendar, Sparkles, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -15,16 +15,46 @@ import {
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuHeader, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { Globe } from "lucide-react";
+import { FiltersModal } from "@/components/search/FiltersModal";
 
 export function Navbar() {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(true);
+  const [notificationsList, setNotificationsList] = useState<any[]>([
+    {
+      id: '1',
+      title: '¡Visita Confirmada!',
+      desc: 'Tu cita para recorrer la propiedad ha sido agendada con éxito.',
+      time: 'Hace 10 min',
+      icon: Calendar,
+      unread: true,
+    },
+    {
+      id: '2',
+      title: 'Nueva Propiedad Disponible',
+      desc: 'Se ha publicado una nueva mansión exclusiva en Beverly Hills.',
+      time: 'Hace 1 hora',
+      icon: Home,
+      unread: true,
+    },
+    {
+      id: '3',
+      title: 'Bienvenido a LuxeEstate',
+      desc: 'Explora el catálogo exclusivo y guarda tus propiedades favoritas.',
+      time: 'Hace 1 día',
+      icon: Sparkles,
+      unread: false,
+    }
+  ]);
+
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const { language, setLanguage, t } = useLanguage();
 
@@ -111,6 +141,15 @@ export function Navbar() {
     window.location.href = '/';
   };
 
+  const handleSearchClick = () => {
+    router.push('/properties');
+  };
+
+  const markAllNotificationsAsRead = () => {
+    setHasUnreadNotifications(false);
+    setNotificationsList(prev => prev.map(n => ({ ...n, unread: false })));
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-[#19322F]/5 bg-white/80 backdrop-blur-md">
       <div className="max-w-7xl mx-auto flex h-20 items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -168,15 +207,68 @@ export function Navbar() {
             <span>{language === 'es' ? '🇪🇸 ES' : '🇺🇸 EN'}</span>
           </button>
 
-          <Button variant="ghost" size="icon" className="text-[#19322F] hover:text-[#006655]">
+          {/* 🔍 Interactive Search Icon */}
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={handleSearchClick}
+            className="text-[#19322F] hover:text-[#006655] cursor-pointer"
+            title="Buscar Propiedades"
+          >
             <Search className="w-5 h-5" />
           </Button>
-          <div className="relative">
-            <Button variant="ghost" size="icon" className="text-[#19322F] hover:text-[#006655]">
-              <Bell className="w-5 h-5" />
-            </Button>
-            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-          </div>
+
+          {/* 🔔 Interactive Notifications Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="relative">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="text-[#19322F] hover:text-[#006655] cursor-pointer"
+                  title="Notificaciones"
+                >
+                  <Bell className="w-5 h-5" />
+                </Button>
+                {hasUnreadNotifications && (
+                  <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+                )}
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 rounded-2xl p-3 shadow-2xl bg-white border border-slate-100">
+              <div className="flex items-center justify-between px-2 py-1 mb-2">
+                <span className="font-bold text-sm text-[#19322F]">Notificaciones</span>
+                {hasUnreadNotifications && (
+                  <button 
+                    onClick={markAllNotificationsAsRead}
+                    className="text-[11px] text-[#006655] font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Check className="w-3 h-3" /> Marcar leídas
+                  </button>
+                )}
+              </div>
+              <DropdownMenuSeparator />
+              <div className="space-y-2 py-1 max-h-72 overflow-y-auto">
+                {notificationsList.map((item) => (
+                  <div 
+                    key={item.id} 
+                    className={`p-3 rounded-xl transition-colors flex gap-3 items-start ${
+                      item.unread ? 'bg-emerald-50/60 border border-emerald-100' : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 text-[#006655] flex items-center justify-center shrink-0 mt-0.5">
+                      <item.icon className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-xs font-bold text-[#19322F]">{item.title}</p>
+                      <p className="text-[11px] text-[#5C706D] mt-0.5 leading-snug">{item.desc}</p>
+                      <span className="text-[10px] text-slate-400 mt-1 block">{item.time}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
           
           <Separator orientation="vertical" className="h-8 hidden sm:block" />
 
@@ -230,11 +322,11 @@ export function Navbar() {
 
           {/* Mobile Menu Button */}
           <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden text-[#19322F]">
+            <SheetTrigger render={
+              <Button variant="ghost" size="icon" className="md:hidden text-[#19322F] cursor-pointer">
                 <Menu className="w-6 h-6" />
               </Button>
-            </SheetTrigger>
+            } />
             <SheetContent side="right" className="w-72 bg-white">
               <SheetHeader className="text-left border-b pb-4">
                 <SheetTitle className="flex items-center space-x-2">
