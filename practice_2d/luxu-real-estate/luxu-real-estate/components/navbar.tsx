@@ -157,11 +157,11 @@ export function Navbar() {
 
   // Dynamic Navigation Links based on User Role (RBAC)
   const navLinks = [
-    { href: '/properties', label: t("nav.buy"), roles: ['Admin', 'Cliente'] },
-    { href: '/properties?type=rent', label: t("nav.rent"), roles: ['Admin', 'Cliente'] },
-    { href: '/favorites', label: language === 'es' ? 'Favoritos' : 'Favorites', roles: ['Admin', 'Cliente'] },
+    { href: '/properties', label: t("nav.buy"), roles: ['Cliente'] },
+    { href: '/properties?type=rent', label: t("nav.rent"), roles: ['Cliente'] },
+    { href: '/favorites', label: language === 'es' ? 'Favoritos' : 'Favorites', roles: ['Cliente'] },
     { href: '/admin/properties', label: language === 'es' ? 'Panel Control' : 'Dashboard', roles: ['Admin'] },
-    { href: '/admin/properties/new', label: language === 'es' ? 'Publicar Inmueble' : 'Sell', roles: ['Admin'] },
+    { href: '/admin/properties/add', label: language === 'es' ? 'Vender' : 'Sell', roles: ['Admin'] },
     { href: '/admin/users', label: language === 'es' ? 'Usuarios' : 'Users', roles: ['Admin'] },
   ];
 
