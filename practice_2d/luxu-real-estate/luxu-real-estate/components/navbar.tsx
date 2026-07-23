@@ -286,13 +286,22 @@ export function Navbar() {
                 </div>
               } />
               <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-xl p-2 bg-white">
-                <DropdownMenuItem asChild>
-                  <Link href="/profile" className="cursor-pointer font-medium">{t("nav.profile")}</Link>
+                <DropdownMenuItem 
+                  onClick={() => router.push('/profile')} 
+                  className="cursor-pointer font-medium p-2 hover:bg-slate-100 rounded-lg"
+                >
+                  {t("nav.profile")}
                 </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/admin/properties" className="cursor-pointer font-medium">{t("nav.dashboard")}</Link>
+                <DropdownMenuItem 
+                  onClick={() => router.push('/admin/properties')} 
+                  className="cursor-pointer font-medium p-2 hover:bg-slate-100 rounded-lg"
+                >
+                  {t("nav.dashboard")}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:bg-red-50 cursor-pointer font-medium">
+                <DropdownMenuItem 
+                  onClick={handleSignOut} 
+                  className="text-red-600 focus:bg-red-50 cursor-pointer font-medium p-2 hover:bg-red-50 rounded-lg"
+                >
                   {t("nav.signOut")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
