@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
-import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Loader2, ArrowLeft, Home, MapPin, DollarSign, Save } from 'lucide-react';
 import Link from 'next/link';
@@ -17,7 +16,6 @@ export function EditPropertyForm({ propertyId }: { propertyId: string }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const router = useRouter();
-  const supabase = createClient();
   const { language } = useLanguage();
 
   const [formData, setFormData] = useState({
@@ -77,69 +75,56 @@ export function EditPropertyForm({ propertyId }: { propertyId: string }) {
       const garageNum = parseInt(formData.garage || '0');
       const validImage = formData.imageUrl.trim() || 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop';
 
-      const updatedProp = {
-        id: propertyId,
-        slug: propertyId,
+      const updatePayload = {
         title: formData.title,
         description: formData.description,
         price: priceNum,
         address: formData.location,
-        location: formData.location,
         bedrooms: bedsNum,
-        beds: bedsNum,
         bathrooms: bathsNum,
-        baths: bathsNum,
         sqft: sqftNum,
         garage: garageNum,
         images: [validImage],
         status: formData.status
       };
 
-      // 1. Update in Supabase DB with Promise timeout to prevent hanging
+      // 1. Direct Supabase REST API Update (PATCH)
       try {
-        const supabasePromise = (async () => {
-          if (propertyId.includes('-') && propertyId.length > 20) {
-            return await supabase
-              .from('properties')
-              .update({
-                title: formData.title,
-                description: formData.description,
-                price: priceNum,
-                address: formData.location,
-                bedrooms: bedsNum,
-                bathrooms: bathsNum,
-                sqft: sqftNum,
-                garage: garageNum,
-                images: [validImage],
-                status: formData.status
-              })
-              .eq('id', propertyId);
-          } else {
-            return await supabase
-              .from('properties')
-              .update({
-                title: formData.title,
-                description: formData.description,
-                price: priceNum,
-                address: formData.location,
-                bedrooms: bedsNum,
-                bathrooms: bathsNum,
-                sqft: sqftNum,
-                garage: garageNum,
-                images: [validImage],
-                status: formData.status
-              })
-              .eq('slug', propertyId);
-          }
-        })();
+        let endpoint = `https://ujnaghovqcejwmwusakr.supabase.co/rest/v1/properties?slug=eq.${encodeURIComponent(propertyId)}`;
+        if (propertyId.includes('-') && propertyId.length > 20) {
+          endpoint = `https://ujnaghovqcejwmwusakr.supabase.co/rest/v1/properties?id=eq.${encodeURIComponent(propertyId)}`;
+        }
 
-        const timeoutPromise = new Promise(res => setTimeout(res, 1200));
-        await Promise.race([supabasePromise, timeoutPromise]);
+        const resp = await fetch(endpoint, {
+          method: 'PATCH',
+          headers: {
+            'apikey': 'sb_publishable_6ZT_fKACRFHA-ny5MUc3PA_jAD54ZZQ',
+            'Authorization': 'Bearer sb_publishable_6ZT_fKACRFHA-ny5MUc3PA_jAD54ZZQ',
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(updatePayload)
+        });
+
+        if (resp.ok) {
+          console.log("Supabase REST API Update Success");
+        } else {
+          console.warn("Supabase REST API Update Notice:", await resp.text());
+        }
       } catch (dbErr) {
-        console.warn("Supabase update error (non-blocking):", dbErr);
+        console.warn("Supabase update fetch exception:", dbErr);
       }
 
-      // 2. Update in localStorage custom properties for instant client-side update
+      // 2. Local Cache Update
+      const updatedProp = {
+        id: propertyId,
+        slug: propertyId,
+        ...updatePayload,
+        location: formData.location,
+        beds: bedsNum,
+        baths: bathsNum
+      };
+
       if (typeof window !== 'undefined') {
         const existing = localStorage.getItem('luxe_custom_properties');
         let list = existing ? JSON.parse(existing) : [];

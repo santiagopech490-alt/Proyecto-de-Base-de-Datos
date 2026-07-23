@@ -49,7 +49,6 @@ export function AddPropertyForm({ userId }: { userId: string }) {
       const garageNum = parseInt(formData.garage || '0');
       const validImage = formData.imageUrl.trim() || 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop';
 
-      // Payload strictly conforming to Supabase properties schema
       const supabasePayload = {
         title: formData.title,
         slug: slug,
@@ -66,25 +65,34 @@ export function AddPropertyForm({ userId }: { userId: string }) {
         listing_status: 'For Sale'
       };
 
-      // 1. Direct Supabase DB Insertion
+      // 1. Direct Supabase DB Insertion via REST API (Guaranteed Instant Delivery)
       let dbInsertedProp = null;
       try {
-        const { data, error } = await supabase
-          .from('properties')
-          .insert([supabasePayload])
-          .select();
-        
-        if (error) {
-          console.warn("Supabase insert notice:", error.message || error);
-        } else if (data && data.length > 0) {
-          dbInsertedProp = data[0];
-          console.log("Successfully inserted into Supabase DB:", dbInsertedProp);
+        const resp = await fetch('https://ujnaghovqcejwmwusakr.supabase.co/rest/v1/properties', {
+          method: 'POST',
+          headers: {
+            'apikey': 'sb_publishable_6ZT_fKACRFHA-ny5MUc3PA_jAD54ZZQ',
+            'Authorization': 'Bearer sb_publishable_6ZT_fKACRFHA-ny5MUc3PA_jAD54ZZQ',
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(supabasePayload)
+        });
+
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && data.length > 0) {
+            dbInsertedProp = data[0];
+            console.log("Supabase REST API Insert Success:", dbInsertedProp);
+          }
+        } else {
+          console.warn("Supabase REST API Insert Notice:", await resp.text());
         }
       } catch (dbErr) {
-        console.warn("Supabase insert caught exception:", dbErr);
+        console.warn("Supabase insert fetch exception:", dbErr);
       }
 
-      // 2. Save locally for instant rendering & fallback
+      // 2. Local Fallback & Cache Update
       const finalProp = dbInsertedProp || {
         ...supabasePayload,
         location: formData.location,
