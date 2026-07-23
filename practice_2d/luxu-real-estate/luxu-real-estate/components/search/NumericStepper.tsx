@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Minus, Plus } from 'lucide-react';
 import { usePropertyFilters, PropertyFilters } from '@/lib/hooks/usePropertyFilters';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 interface NumericStepperProps {
   label: string;
@@ -11,6 +12,7 @@ interface NumericStepperProps {
 }
 
 export function NumericStepper({ label, filterKey }: NumericStepperProps) {
+  const { t } = useLanguage();
   const { filters, setFilter } = usePropertyFilters();
   const value = filters[filterKey] as number | undefined;
 
@@ -35,19 +37,19 @@ export function NumericStepper({ label, filterKey }: NumericStepperProps) {
         <Button
           variant="outline"
           size="icon"
-          className="h-8 w-8 rounded-full border-muted"
+          className="h-8 w-8 rounded-full border-muted cursor-pointer"
           onClick={handleDecrement}
           aria-label="decrement"
         >
           <Minus className="h-4 w-4" />
         </Button>
-        <span className="min-w-[2rem] text-center text-sm font-semibold">
-          {value ? `${value}+` : 'Any'}
+        <span className="min-w-[3rem] text-center text-sm font-semibold">
+          {value ? `${value}+` : t("filtersModal.any")}
         </span>
         <Button
           variant="outline"
           size="icon"
-          className="h-8 w-8 rounded-full border-muted"
+          className="h-8 w-8 rounded-full border-muted cursor-pointer"
           onClick={handleIncrement}
           aria-label="increment"
         >

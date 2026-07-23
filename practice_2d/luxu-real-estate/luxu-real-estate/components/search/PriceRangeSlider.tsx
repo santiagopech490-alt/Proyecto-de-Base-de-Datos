@@ -5,8 +5,10 @@ import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { usePropertyFilters } from '@/lib/hooks/usePropertyFilters';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 export function PriceRangeSlider() {
+  const { t } = useLanguage();
   const { filters, setFilter } = usePropertyFilters();
   
   const minPrice = filters.minPrice || 0;
@@ -49,9 +51,9 @@ export function PriceRangeSlider() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <Label className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-          Price Range
+          {t("filtersModal.priceRange")}
         </Label>
-        <span className="text-sm font-semibold text-emerald-700">
+        <span className="text-sm font-semibold text-[#006655]">
           {formatPrice(localValues[0])} – {formatPrice(localValues[1])}
         </span>
       </div>
@@ -63,13 +65,13 @@ export function PriceRangeSlider() {
         value={localValues}
         onValueChange={handleSliderChange}
         onValueCommit={handleSliderCommit}
-        className="[&_[role=slider]]:border-emerald-600 [&_[role=slider]]:bg-white [&_.bg-primary]:bg-emerald-600"
+        className="[&_[role=slider]]:border-[#006655] [&_[role=slider]]:bg-white [&_.bg-primary]:bg-[#006655]"
       />
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="minPrice" className="text-xs font-medium text-muted-foreground uppercase">
-            Min Price
+            {t("filtersModal.minPrice")}
           </Label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
@@ -85,7 +87,7 @@ export function PriceRangeSlider() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="maxPrice" className="text-xs font-medium text-muted-foreground uppercase">
-            Max Price
+            {t("filtersModal.maxPrice")}
           </Label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>

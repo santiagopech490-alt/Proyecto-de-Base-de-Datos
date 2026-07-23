@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { usePropertyFilters } from '@/lib/hooks/usePropertyFilters';
 import { getPropertyCount } from '@/lib/actions';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 export function ShowHomesButton() {
+  const { t } = useLanguage();
   const { filters } = usePropertyFilters();
   const [count, setCount] = React.useState<number | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -25,7 +27,6 @@ export function ShowHomesButton() {
       }
     };
 
-    // Debounce to avoid too many requests
     const timer = setTimeout(() => {
       fetchCount();
     }, 400);
@@ -35,17 +36,17 @@ export function ShowHomesButton() {
 
   return (
     <Button 
-      className="w-full h-12 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-lg shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2"
+      className="w-full h-12 bg-[#006655] hover:bg-[#005544] text-white font-semibold rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
       disabled={isLoading}
     >
       {isLoading ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Updating...</span>
+          <span>{t("filtersModal.updating")}</span>
         </>
       ) : (
         <>
-          <span>Show {count !== null ? count : '...'} Homes</span>
+          <span>{t("filtersModal.showHomes")} {count !== null ? count : '...'} {t("filtersModal.homesLabel")}</span>
           <ArrowRight className="h-4 w-4" />
         </>
       )}
