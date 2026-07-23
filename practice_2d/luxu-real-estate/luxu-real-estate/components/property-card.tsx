@@ -119,7 +119,7 @@ export function PropertyCard({
                   <MapPin className="w-3.5 h-3.5" /> {location}
                 </p>
               </div>
-              <span className="text-xl font-semibold text-[#006655]">{price}</span>
+              <span suppressHydrationWarning className="text-xl font-semibold text-[#006655]">{price}</span>
             </div>
             <div className="flex items-center gap-6 mt-6 pt-6 border-t border-[#19322F]/5">
               <div className="flex items-center gap-2 text-[#5C706D] text-sm">
@@ -169,7 +169,7 @@ export function PropertyCard({
         </div>
         <CardContent className="p-4 flex flex-col flex-grow">
           <div className="flex justify-between items-baseline mb-2">
-            <h3 className="font-bold text-lg text-[#19322F]">{price}</h3>
+            <h3 suppressHydrationWarning className="font-bold text-lg text-[#19322F]">{price}</h3>
           </div>
           <h4 className="text-[#19322F] font-medium truncate mb-1">{title}</h4>
           <p className="text-[#5C706D] text-xs mb-4">{location}</p>

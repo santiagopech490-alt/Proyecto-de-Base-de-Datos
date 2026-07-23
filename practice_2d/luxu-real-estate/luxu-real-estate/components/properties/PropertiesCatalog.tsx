@@ -131,10 +131,10 @@ export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps)
               slug={property.slug}
               title={property.title}
               location={property.location}
-              price={`$${(property.price || 0).toLocaleString()}`}
+              price={`$${(property.price || 0).toLocaleString('en-US')}`}
               beds={property.beds}
               baths={property.baths}
-              area={`${(property.sqft || 0).toLocaleString()} m²`}
+              area={`${(property.sqft || 0).toLocaleString('en-US')} m²`}
               imageUrl={(property.images && property.images.length > 0) ? property.images[0] : 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop'}
               status={(property.status || 'active').toUpperCase()}
             />
