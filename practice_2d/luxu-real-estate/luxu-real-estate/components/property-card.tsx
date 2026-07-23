@@ -3,12 +3,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Bed, Bath, MapPin, Heart } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useFavorites } from "@/lib/hooks/useFavorites";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
-import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
 interface PropertyCardProps {
@@ -45,7 +43,6 @@ export function PropertyCard({
   const { favorites, toggleFavorite } = useFavorites();
   const targetKey = slug || id;
   const isFavorite = favorites.includes(slug) || favorites.includes(id);
-  const supabase = createClient();
   const { t, language } = useLanguage();
 
   const getTranslatedStatus = (st?: string) => {
@@ -57,10 +54,11 @@ export function PropertyCard({
     return st;
   };
 
-  const handleToggleFavorite = async (e: React.MouseEvent) => {
+  const handleToggleFavorite = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
+    if (!targetKey) return;
     toggleFavorite(targetKey);
 
     const willBeFavorite = !isFavorite;
@@ -74,116 +72,124 @@ export function PropertyCard({
 
   if (variant === "featured") {
     return (
+      <div className="relative block h-full group">
+        {/* Heart button outside of Link */}
+        <button
+          type="button"
+          onClick={handleToggleFavorite}
+          className={`absolute top-4 right-4 w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-all cursor-pointer z-30 shadow-md ${
+            isFavorite ? "text-red-500 bg-white" : "text-[#19322F] bg-white/90 hover:bg-[#006655] hover:text-white"
+          }`}
+          title={isFavorite ? "Eliminar de favoritas" : "Agregar a favoritas"}
+        >
+          <Heart className={`w-5 h-5 ${isFavorite ? "fill-current" : ""}`} />
+        </button>
+
+        <Link href={`/properties/${targetKey}`} className="block h-full">
+          <Card className="rounded-2xl overflow-hidden border-none shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] bg-white cursor-pointer h-full flex flex-col">
+            <div className="aspect-[4/3] w-full overflow-hidden relative bg-slate-200">
+              <Image
+                src={imageUrl}
+                alt={title}
+                fill
+                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                sizes="(max-width: 768px) 100vw, 50vw"
+              />
+              {isExclusive && (
+                <Badge className="absolute top-4 left-4 bg-white/90 text-[#19322F] hover:bg-white/90 backdrop-blur-sm border-none px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                  {language === 'es' ? 'EXCLUSIVO' : 'EXCLUSIVE'}
+                </Badge>
+              )}
+              {isNew && (
+                <Badge className="absolute top-4 left-4 bg-white/90 text-[#19322F] hover:bg-white/90 backdrop-blur-sm border-none px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                  {language === 'es' ? 'NUEVO' : 'NEW'}
+                </Badge>
+              )}
+              <div className="absolute bottom-0 inset-x-0 h-1/2 bg-gradient-to-t from-black/60 to-transparent opacity-60"></div>
+            </div>
+            <CardContent className="p-6 relative flex flex-col flex-grow">
+              <div className="flex justify-between items-start mb-2 gap-2">
+                <div>
+                  <h3 className="text-xl font-bold text-[#19322F] group-hover:text-[#006655] transition-colors">
+                    {title}
+                  </h3>
+                  <p className="text-[#5C706D] text-sm flex items-center gap-1 mt-1">
+                    <MapPin className="w-3.5 h-3.5" /> {location}
+                  </p>
+                </div>
+                <span suppressHydrationWarning className="text-xl font-bold text-[#006655] shrink-0">{price}</span>
+              </div>
+              <div className="flex items-center gap-6 mt-auto pt-6 border-t border-[#19322F]/5 text-[#5C706D] text-sm font-semibold">
+                <div className="flex items-center gap-2">
+                  <Bed className="w-4.5 h-4.5 text-[#006655]" /> {beds} {t("properties.beds")}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Bath className="w-4.5 h-4.5 text-[#006655]" /> {baths} {t("properties.baths")}
+                </div>
+                <div className="flex items-center gap-2">
+                  <SquareFootage className="w-4.5 h-4.5 text-[#006655]" /> {area}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative block h-full group">
+      {/* Heart button outside of Link */}
+      <button
+        type="button"
+        onClick={handleToggleFavorite}
+        className={`absolute top-3 right-3 p-2 w-9 h-9 rounded-full backdrop-blur-sm transition-all cursor-pointer z-30 shadow-md flex items-center justify-center ${
+          isFavorite ? "text-red-500 bg-white" : "text-[#19322F] bg-white/90 hover:bg-[#006655] hover:text-white"
+        }`}
+        title={isFavorite ? "Eliminar de favoritas" : "Agregar a favoritas"}
+      >
+        <Heart className={`w-4 h-4 ${isFavorite ? "fill-current" : ""}`} />
+      </button>
+
       <Link href={`/properties/${targetKey}`} className="block h-full">
-        <Card className="group relative rounded-2xl overflow-hidden border-none shadow-[0_10px_40px_-10px_rgba(0,0,0,0.05)] bg-white cursor-pointer h-full flex flex-col">
-          <div className="aspect-[4/3] w-full overflow-hidden relative bg-slate-200">
+        <Card className="bg-white border-none rounded-2xl overflow-hidden shadow-[0_4px_6px_-1px_rgba(0,0,0,0.02),0_2px_4px_-1px_rgba(0,0,0,0.02)] hover:shadow-xl transition-all duration-300 cursor-pointer h-full flex flex-col">
+          <div className="relative aspect-[4/3] overflow-hidden bg-slate-200">
             <Image
               src={imageUrl}
               alt={title}
               fill
-              className="object-cover transition-transform duration-700 group-hover:scale-105"
-              sizes="(max-width: 768px) 100vw, 50vw"
+              className="object-cover transition-transform duration-500 group-hover:scale-110"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             />
-            {isExclusive && (
-              <Badge className="absolute top-4 left-4 bg-white/90 text-[#19322F] hover:bg-white/90 backdrop-blur-sm border-none px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                {language === 'es' ? 'EXCLUSIVO' : 'EXCLUSIVE'}
+            {status && (
+              <Badge className={`absolute bottom-3 left-3 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-lg border-none hover:opacity-90 ${
+                status.includes("SALE") ? "bg-[#19322F]/90" : "bg-[#006655]/90"
+              }`}>
+                {getTranslatedStatus(status)}
               </Badge>
             )}
-            {isNew && (
-              <Badge className="absolute top-4 left-4 bg-white/90 text-[#19322F] hover:bg-white/90 backdrop-blur-sm border-none px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                {language === 'es' ? 'NUEVO' : 'NEW'}
-              </Badge>
-            )}
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={handleToggleFavorite}
-              className={`absolute top-4 right-4 w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center transition-all cursor-pointer z-10 ${
-                isFavorite ? "text-red-500 bg-white shadow-md" : "text-[#19322F] hover:bg-[#006655] hover:text-white"
-              }`}
-            >
-              <Heart className={`w-5 h-5 ${isFavorite ? "fill-current" : ""}`} />
-            </Button>
-            <div className="absolute bottom-0 inset-x-0 h-1/2 bg-gradient-to-t from-black/60 to-transparent opacity-60"></div>
           </div>
-          <CardContent className="p-6 relative flex flex-col flex-grow">
-            <div className="flex justify-between items-start mb-2 gap-2">
-              <div>
-                <h3 className="text-xl font-bold text-[#19322F] group-hover:text-[#006655] transition-colors">
-                  {title}
-                </h3>
-                <p className="text-[#5C706D] text-sm flex items-center gap-1 mt-1">
-                  <MapPin className="w-3.5 h-3.5" /> {location}
-                </p>
-              </div>
-              <span suppressHydrationWarning className="text-xl font-bold text-[#006655] shrink-0">{price}</span>
+          <CardContent className="p-4 flex flex-col flex-grow">
+            <div className="flex justify-between items-baseline mb-2">
+              <h3 suppressHydrationWarning className="font-bold text-lg text-[#19322F]">{price}</h3>
             </div>
-            <div className="flex items-center gap-6 mt-auto pt-6 border-t border-[#19322F]/5 text-[#5C706D] text-sm font-semibold">
-              <div className="flex items-center gap-2">
-                <Bed className="w-4.5 h-4.5 text-[#006655]" /> {beds} {t("properties.beds")}
+            <h4 className="text-[#19322F] font-bold truncate mb-1">{title}</h4>
+            <p className="text-[#5C706D] text-xs mb-4">{location}</p>
+            <div className="mt-auto flex items-center justify-between pt-3 border-t border-gray-100 text-[#5C706D] text-xs font-semibold">
+              <div className="flex items-center gap-1">
+                <Bed className="w-3.5 h-3.5 text-[#006655]" /> {beds} {t("properties.beds")}
               </div>
-              <div className="flex items-center gap-2">
-                <Bath className="w-4.5 h-4.5 text-[#006655]" /> {baths} {t("properties.baths")}
+              <div className="flex items-center gap-1">
+                <Bath className="w-3.5 h-3.5 text-[#006655]" /> {baths} {t("properties.baths")}
               </div>
-              <div className="flex items-center gap-2">
-                <SquareFootage className="w-4.5 h-4.5 text-[#006655]" /> {area}
+              <div className="flex items-center gap-1">
+                <SquareFootage className="w-3.5 h-3.5 text-[#006655]" /> {area}
               </div>
             </div>
           </CardContent>
         </Card>
       </Link>
-    );
-  }
-
-  return (
-    <Link href={`/properties/${targetKey}`} className="block h-full">
-      <Card className="bg-white border-none rounded-2xl overflow-hidden shadow-[0_4px_6px_-1px_rgba(0,0,0,0.02),0_2px_4px_-1px_rgba(0,0,0,0.02)] hover:shadow-xl transition-all duration-300 group cursor-pointer h-full flex flex-col">
-        <div className="relative aspect-[4/3] overflow-hidden bg-slate-200">
-          <Image
-            src={imageUrl}
-            alt={title}
-            fill
-            className="object-cover transition-transform duration-500 group-hover:scale-110"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-          />
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={handleToggleFavorite}
-            className={`absolute top-3 right-3 p-2 w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm transition-all cursor-pointer z-10 ${
-              isFavorite ? "text-red-500 bg-white shadow-md" : "text-[#19322F] hover:bg-[#006655] hover:text-white"
-            }`}
-          >
-            <Heart className={`w-4 h-4 ${isFavorite ? "fill-current" : ""}`} />
-          </Button>
-          {status && (
-            <Badge className={`absolute bottom-3 left-3 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-lg border-none hover:opacity-90 ${
-              status.includes("SALE") ? "bg-[#19322F]/90" : "bg-[#006655]/90"
-            }`}>
-              {getTranslatedStatus(status)}
-            </Badge>
-          )}
-        </div>
-        <CardContent className="p-4 flex flex-col flex-grow">
-          <div className="flex justify-between items-baseline mb-2">
-            <h3 suppressHydrationWarning className="font-bold text-lg text-[#19322F]">{price}</h3>
-          </div>
-          <h4 className="text-[#19322F] font-bold truncate mb-1">{title}</h4>
-          <p className="text-[#5C706D] text-xs mb-4">{location}</p>
-          <div className="mt-auto flex items-center justify-between pt-3 border-t border-gray-100 text-[#5C706D] text-xs font-semibold">
-            <div className="flex items-center gap-1">
-              <Bed className="w-3.5 h-3.5 text-[#006655]" /> {beds} {t("properties.beds")}
-            </div>
-            <div className="flex items-center gap-1">
-              <Bath className="w-3.5 h-3.5 text-[#006655]" /> {baths} {t("properties.baths")}
-            </div>
-            <div className="flex items-center gap-1">
-              <SquareFootage className="w-3.5 h-3.5 text-[#006655]" /> {area}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
+    </div>
   );
 }
 
