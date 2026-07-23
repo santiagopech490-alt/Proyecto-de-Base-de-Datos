@@ -7,13 +7,17 @@ import { Property } from "@/types/property";
 import { Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 
 interface PropertyTableRowProps {
   property: Property;
+  onDelete?: (id: string) => void;
 }
 
-export function PropertyTableRow({ property }: PropertyTableRowProps) {
-  const { t } = useLanguage();
+export function PropertyTableRow({ property, onDelete }: PropertyTableRowProps) {
+  const { t, language } = useLanguage();
+  const supabase = createClient();
   const status = property.status?.toLowerCase() || 'active';
   
   const statusColors: Record<string, string> = {
@@ -33,9 +37,47 @@ export function PropertyTableRow({ property }: PropertyTableRowProps) {
   const statusColor = statusColors[status] || "bg-slate-100 text-slate-800";
   const displayStatus = statusLabels[status] || (status.charAt(0).toUpperCase() + status.slice(1));
 
-  const handleDelete = () => {
-    if (confirm("Are you sure you want to delete this property?")) {
-      console.log("Deleting property:", property.id);
+  const handleDelete = async () => {
+    const confirmText = language === 'es' 
+      ? `¿Estás seguro de que deseas eliminar la propiedad "${property.title}"?`
+      : `Are you sure you want to delete property "${property.title}"?`;
+
+    if (!confirm(confirmText)) return;
+
+    const propKey = property.id || property.slug;
+
+    // 1. Remove from localStorage custom properties
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('luxe_custom_properties');
+      if (saved) {
+        try {
+          const list: Property[] = JSON.parse(saved);
+          const filtered = list.filter(p => p.id !== propKey && p.slug !== propKey);
+          localStorage.setItem('luxe_custom_properties', JSON.stringify(filtered));
+        } catch {}
+      }
+
+      // Add to deleted properties list so mock properties also stay deleted
+      const deletedStr = localStorage.getItem('luxe_deleted_properties');
+      const deletedList = deletedStr ? JSON.parse(deletedStr) : [];
+      if (!deletedList.includes(propKey)) {
+        deletedList.push(propKey);
+        localStorage.setItem('luxe_deleted_properties', JSON.stringify(deletedList));
+      }
+    }
+
+    // 2. Remove from Supabase DB
+    try {
+      await supabase
+        .from('properties')
+        .delete()
+        .or(`id.eq.${propKey},slug.eq.${propKey}`);
+    } catch {}
+
+    toast.success(language === 'es' ? 'Propiedad eliminada correctamente' : 'Property deleted successfully');
+
+    if (onDelete) {
+      onDelete(propKey);
     }
   };
 
@@ -54,7 +96,7 @@ export function PropertyTableRow({ property }: PropertyTableRowProps) {
           </div>
         </div>
       </TableCell>
-      <TableCell>${property.price.toLocaleString('en-US')}</TableCell>
+      <TableCell>${(property.price || 0).toLocaleString('en-US')}</TableCell>
       <TableCell>
         <Badge className={statusColor}>
           {displayStatus}
@@ -62,12 +104,19 @@ export function PropertyTableRow({ property }: PropertyTableRowProps) {
       </TableCell>
       <TableCell className="text-right">
         <Link 
-          href={`/admin/properties/edit/${property.id}`}
-          className="inline-flex items-center justify-center h-9 w-9 rounded-md hover:bg-slate-100"
+          href={`/admin/properties/edit/${property.id || property.slug}`}
+          className="inline-flex items-center justify-center h-9 w-9 rounded-md hover:bg-slate-100 mr-1"
+          title="Editar Propiedad"
         >
-          <Pencil className="w-4 h-4" />
+          <Pencil className="w-4 h-4 text-slate-600" />
         </Link>
-        <Button variant="ghost" size="icon" className="text-red-500" onClick={handleDelete}>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer" 
+          onClick={handleDelete}
+          title="Eliminar Propiedad"
+        >
           <Trash2 className="w-4 h-4" />
         </Button>
       </TableCell>

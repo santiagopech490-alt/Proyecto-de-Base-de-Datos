@@ -22,16 +22,33 @@ export function PropertyTable({ properties }: PropertyTableProps) {
   const [list, setList] = useState<Property[]>(properties);
 
   useEffect(() => {
-    const saved = localStorage.getItem('luxe_custom_properties');
+    let deletedKeys: string[] = [];
+    if (typeof window !== 'undefined') {
+      const deletedStr = localStorage.getItem('luxe_deleted_properties');
+      if (deletedStr) {
+        try { deletedKeys = JSON.parse(deletedStr); } catch {}
+      }
+    }
+
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('luxe_custom_properties') : null;
+    let customProps: Property[] = [];
     if (saved) {
       try {
-        const customProps: Property[] = JSON.parse(saved);
-        setList([...customProps, ...properties]);
+        customProps = JSON.parse(saved);
       } catch {}
-    } else {
-      setList(properties);
     }
+
+    const propIds = new Set(properties.map(p => p.id));
+    const uniqueCustoms = customProps.filter(cp => !propIds.has(cp.id));
+    const combined = [...uniqueCustoms, ...properties];
+
+    const filtered = combined.filter(p => !deletedKeys.includes(p.id) && !deletedKeys.includes(p.slug));
+    setList(filtered);
   }, [properties]);
+
+  const handleDeleteItem = (targetKey: string) => {
+    setList(prev => prev.filter(item => item.id !== targetKey && item.slug !== targetKey));
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
@@ -46,7 +63,11 @@ export function PropertyTable({ properties }: PropertyTableProps) {
         </TableHeader>
         <TableBody>
           {list.map((property, idx) => (
-            <PropertyTableRow key={property.id || idx} property={property} />
+            <PropertyTableRow 
+              key={property.id || property.slug || idx} 
+              property={property} 
+              onDelete={handleDeleteItem}
+            />
           ))}
         </TableBody>
       </Table>

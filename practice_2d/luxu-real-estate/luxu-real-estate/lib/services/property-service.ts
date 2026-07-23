@@ -80,7 +80,16 @@ export async function getAllProperties(): Promise<Property[]> {
     }
   }
 
-  return uniqueProps;
+  let deletedKeys: string[] = [];
+  if (typeof window !== 'undefined') {
+    const deletedStr = localStorage.getItem('luxe_deleted_properties');
+    if (deletedStr) {
+      try { deletedKeys = JSON.parse(deletedStr); } catch {}
+    }
+  }
+
+  const finalProps = uniqueProps.filter(p => !deletedKeys.includes(p.id) && !deletedKeys.includes(p.slug));
+  return finalProps;
 }
 
 export async function getPropertiesByOwner(ownerId: string): Promise<Property[]> {
