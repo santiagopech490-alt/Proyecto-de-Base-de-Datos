@@ -10,9 +10,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { createUser } from "@/lib/actions/users";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 export function AddUserForm({ onSuccess }: { onSuccess?: () => void }) {
   const router = useRouter();
+  const { t } = useLanguage();
+
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
     defaultValues: {
@@ -23,11 +26,9 @@ export function AddUserForm({ onSuccess }: { onSuccess?: () => void }) {
   });
 
   async function onSubmit(data: UserFormValues) {
-    console.log("Formulario enviado con datos:", data);
     const result = await createUser(data);
-    console.log("Resultado de createUser:", result);
     if (result.success) {
-      toast.success("User created successfully!");
+      toast.success(t("addUserForm.successMsg"));
       form.reset();
       if (onSuccess) onSuccess();
       router.refresh();
@@ -44,9 +45,9 @@ export function AddUserForm({ onSuccess }: { onSuccess?: () => void }) {
           name="full_name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Full Name</FormLabel>
+              <FormLabel>{t("addUserForm.fullName")}</FormLabel>
               <FormControl>
-                <Input placeholder="John Doe" {...field} />
+                <Input placeholder={t("addUserForm.fullNamePlaceholder")} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -57,9 +58,9 @@ export function AddUserForm({ onSuccess }: { onSuccess?: () => void }) {
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email</FormLabel>
+              <FormLabel>{t("addUserForm.email")}</FormLabel>
               <FormControl>
-                <Input placeholder="john@example.com" {...field} />
+                <Input placeholder={t("addUserForm.emailPlaceholder")} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -70,24 +71,26 @@ export function AddUserForm({ onSuccess }: { onSuccess?: () => void }) {
           name="role"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Role</FormLabel>
+              <FormLabel>{t("addUserForm.role")}</FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a role" />
+                  <SelectTrigger className="cursor-pointer">
+                    <SelectValue placeholder={t("addUserForm.selectRole")} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="agent">Agent</SelectItem>
-                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="admin" className="cursor-pointer">{t("addUserForm.adminRole")}</SelectItem>
+                  <SelectItem value="agent" className="cursor-pointer">{t("addUserForm.agentRole")}</SelectItem>
+                  <SelectItem value="user" className="cursor-pointer">{t("addUserForm.userRole")}</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button type="submit">Create User</Button>
+        <Button type="submit" className="bg-[#006655] hover:bg-[#005544] text-white w-full cursor-pointer">
+          {t("addUserForm.createUserBtn")}
+        </Button>
       </form>
     </Form>
   );

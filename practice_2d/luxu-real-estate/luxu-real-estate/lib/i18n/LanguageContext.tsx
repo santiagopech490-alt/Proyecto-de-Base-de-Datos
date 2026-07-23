@@ -173,6 +173,19 @@ const translations = {
       salesYtd: "Ventas (Año)",
       changeRole: "Cambiar Rol",
       suspendUser: "Suspender Usuario",
+    },
+    addUserForm: {
+      fullName: "Nombre Completo",
+      fullNamePlaceholder: "ej. Juan Pérez",
+      email: "Correo Electrónico",
+      emailPlaceholder: "correo@ejemplo.com",
+      role: "Rol",
+      selectRole: "Selecciona un rol",
+      createUserBtn: "Crear Usuario",
+      successMsg: "¡Usuario creado exitosamente!",
+      adminRole: "Administrador",
+      agentRole: "Agente",
+      userRole: "Usuario",
     }
   },
   en: {
@@ -343,6 +356,19 @@ const translations = {
       salesYtd: "Sales (YTD)",
       changeRole: "Change Role",
       suspendUser: "Suspend User",
+    },
+    addUserForm: {
+      fullName: "Full Name",
+      fullNamePlaceholder: "John Doe",
+      email: "Email",
+      emailPlaceholder: "john@example.com",
+      role: "Role",
+      selectRole: "Select a role",
+      createUserBtn: "Create User",
+      successMsg: "User created successfully!",
+      adminRole: "Admin",
+      agentRole: "Agent",
+      userRole: "User",
     }
   }
 };
