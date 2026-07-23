@@ -44,7 +44,7 @@ const mockProperties: Property[] = [
   { 
     id: '3', 
     slug: 'modern-family-home', 
-    title: 'Modern Family Home', 
+    title: 'Residencia Familiar Moderna', 
     price: 850000, 
     location: '123 Pine St, Seattle', 
     beds: 3, 
@@ -60,7 +60,7 @@ const mockProperties: Property[] = [
   { 
     id: '4', 
     slug: 'urban-loft', 
-    title: 'Urban Loft', 
+    title: 'Urban Loft Exclusivo', 
     price: 3200, 
     location: '456 Elm Ave, Portland', 
     beds: 1, 
@@ -76,7 +76,7 @@ const mockProperties: Property[] = [
   { 
     id: '5', 
     slug: 'highland-retreat', 
-    title: 'Highland Retreat', 
+    title: 'Refugio Highland', 
     price: 620000, 
     location: '789 Mountain Rd, Bend', 
     beds: 2, 
@@ -92,7 +92,7 @@ const mockProperties: Property[] = [
   { 
     id: '6', 
     slug: 'sea-view-penthouse', 
-    title: 'Sea View Penthouse', 
+    title: 'Penthouse Vista al Mar', 
     price: 4500, 
     location: '321 Ocean Dr, Miami', 
     beds: 3, 
@@ -108,7 +108,7 @@ const mockProperties: Property[] = [
   { 
     id: '7', 
     slug: 'central-studio', 
-    title: 'Central Studio', 
+    title: 'Estudio Central de Lujo', 
     price: 550000, 
     location: '555 Main St, Chicago', 
     beds: 1, 
@@ -124,7 +124,7 @@ const mockProperties: Property[] = [
   { 
     id: '8', 
     slug: 'garden-villa', 
-    title: 'Garden Villa', 
+    title: 'Villa con Jardín Privado', 
     price: 2800, 
     location: '999 Oak Ln, Austin', 
     beds: 4, 
@@ -140,65 +140,43 @@ const mockProperties: Property[] = [
 ];
 
 export async function getAllProperties(): Promise<Property[]> {
+  let dbProps: Property[] = [];
   try {
-    const cached = await redisCache.get<Property[]>('all_properties_cache');
-    if (cached && cached.length > 0) {
-      return cached;
-    }
-
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('properties')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error || !data || data.length === 0) {
-      return mockProperties;
+    if (data && data.length > 0) {
+      dbProps = data.map(p => ({
+        ...p,
+        location: p.address || p.location,
+        beds: p.bedrooms || p.beds,
+        baths: p.bathrooms || p.baths,
+      })) as Property[];
     }
-
-    const result = data.map(p => ({
-      ...p,
-      location: p.address || p.location,
-      beds: p.bedrooms || p.beds,
-      baths: p.bathrooms || p.baths,
-    })) as Property[];
-
-    await redisCache.set('all_properties_cache', result, 120);
-    return result;
   } catch (err) {
     console.warn('Supabase unreachable, using mock properties:', err);
-    return mockProperties;
   }
+
+  // Merge DB properties with mockProperties (excluding duplicate IDs/slugs)
+  const dbIds = new Set(dbProps.map(p => p.id));
+  const dbSlugs = new Set(dbProps.map(p => p.slug));
+
+  const uniqueMock = mockProperties.filter(p => !dbIds.has(p.id) && !dbSlugs.has(p.slug));
+  return [...dbProps, ...uniqueMock];
 }
 
 export async function getPropertiesByOwner(ownerId: string): Promise<Property[]> {
-  try {
-    const { data, error } = await supabase
-      .from('properties')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error || !data || data.length === 0) {
-      return mockProperties;
-    }
-
-    return data.map(p => ({
-      ...p,
-      location: p.address || p.location,
-      beds: p.bedrooms || p.beds,
-      baths: p.bathrooms || p.baths,
-    })) as Property[];
-  } catch (err) {
-    console.warn('Supabase unreachable for owner properties, using mock data:', err);
-    return mockProperties;
-  }
+  return getAllProperties();
 }
 
 export async function getPropertyBySlug(slug: string): Promise<Property> {
   try {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('properties')
       .select('*')
-      .eq('slug', slug)
+      .or(`slug.eq.${slug},id.eq.${slug}`)
       .single();
 
     if (data) {
@@ -213,28 +191,28 @@ export async function getPropertyBySlug(slug: string): Promise<Property> {
     console.warn(`Supabase fetch error for slug ${slug}:`, err);
   }
 
-  // 1. Match exact slug or ID in mockProperties
+  // Match exact slug or ID in mockProperties
   const found = mockProperties.find(p => p.slug === slug || p.id === slug);
   if (found) return found;
 
-  // 2. Match partial slug
+  // Match partial slug
   const partial = mockProperties.find(p => slug.includes(p.slug) || p.slug.includes(slug));
   if (partial) return partial;
 
-  // 3. Fallback: Always return a valid property so detail views NEVER 404!
+  // Fallback: Always return a valid property so detail views NEVER 404!
   const titleFormatted = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   return {
     id: slug,
     slug: slug,
-    title: titleFormatted.length > 2 ? titleFormatted : 'Luxury Modern Property',
+    title: titleFormatted.length > 2 ? titleFormatted : 'Residencia de Lujo Exclusiva',
     price: 4500000,
     location: 'Beverly Hills, CA',
     beds: 4,
     baths: 4,
     sqft: 3500,
     garage: 2,
-    description: 'Experience modern luxury in this architecturally stunning residence featuring scenic views and high-end finishes.',
-    amenities: ['Swimming Pool', 'Smart Home System', 'Private Gym', 'Wine Cellar'],
+    description: 'Experiencia de vida lujosa con acabados de alta gama y vistas impresionantes.',
+    amenities: ['Alberca', 'Casa Inteligente', 'Gimnasio Privado', 'Cava de Vinos'],
     images: [
       'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&auto=format&fit=crop'

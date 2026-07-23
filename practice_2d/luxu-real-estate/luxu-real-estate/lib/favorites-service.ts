@@ -1,11 +1,10 @@
-import { supabase } from '@/lib/supabase';
-import { getAllProperties } from './services/property-service';
+import { getAllProperties, getPropertyBySlug } from './services/property-service';
 
 export async function fetchFavoriteProperties(slugs: string[]) {
   if (!slugs || slugs.length === 0) return [];
 
   try {
-    const allMockProperties = await getAllProperties();
+    const allProps = await getAllProperties();
     
     // Read custom local properties created in admin panel
     let customProps: any[] = [];
@@ -18,24 +17,30 @@ export async function fetchFavoriteProperties(slugs: string[]) {
       }
     }
 
-    const mergedAll = [...customProps, ...allMockProperties];
-    
-    // Try Supabase first
-    const { data } = await supabase
-      .from('properties')
-      .select('*')
-      .in('slug', slugs);
+    const mergedAll = [...customProps, ...allProps];
 
-    if (data && data.length > 0) {
-      const dbSlugs = new Set(data.map(d => d.slug || d.id));
-      const remainingLocal = mergedAll.filter(p => (slugs.includes(p.slug) || slugs.includes(p.id)) && !dbSlugs.has(p.slug) && !dbSlugs.has(p.id));
-      return [...data, ...remainingLocal];
+    // Filter by matching either slug OR id
+    const result = mergedAll.filter(prop => 
+      slugs.includes(prop.slug) || 
+      slugs.includes(prop.id)
+    );
+
+    // If any slug in favorites didn't match directly in mergedAll, create fallback property cards for them!
+    const matchedKeys = new Set(result.flatMap(r => [r.slug, r.id]));
+    const missingSlugs = slugs.filter(s => s && !matchedKeys.has(s));
+
+    for (const missingSlug of missingSlugs) {
+      try {
+        const fallbackProp = await getPropertyBySlug(missingSlug);
+        if (fallbackProp) {
+          result.push(fallbackProp);
+        }
+      } catch {}
     }
 
-    return mergedAll.filter(prop => slugs.includes(prop.slug) || slugs.includes(prop.id));
+    return result;
   } catch (err) {
-    console.warn("Supabase unreachable, using local/mock properties:", err);
-    const allMockProperties = await getAllProperties();
-    return allMockProperties.filter(prop => slugs.includes(prop.slug) || slugs.includes(prop.id));
+    console.warn("Error in fetchFavoriteProperties:", err);
+    return [];
   }
 }
