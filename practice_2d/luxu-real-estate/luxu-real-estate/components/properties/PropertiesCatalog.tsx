@@ -1,0 +1,147 @@
+'use client';
+
+import React, { useState, useMemo } from 'react';
+import { Search, SlidersHorizontal, Building2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
+import { FiltersModal } from '@/components/search/FiltersModal';
+import { PropertyCard } from '@/components/property-card';
+import { usePropertyFilters } from '@/lib/hooks/usePropertyFilters';
+import { Property } from '@/types/property';
+
+interface PropertiesCatalogProps {
+  initialProperties: Property[];
+}
+
+export function PropertiesCatalog({ initialProperties }: PropertiesCatalogProps) {
+  const { t } = useLanguage();
+  const { filters, setFilter, clearFilters } = usePropertyFilters();
+  const [searchQuery, setSearchQuery] = useState(filters.location || '');
+
+  // Keep local input in sync with URL filter if changed elsewhere
+  React.useEffect(() => {
+    setSearchQuery(filters.location || '');
+  }, [filters.location]);
+
+  const handleSearchSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setFilter('location', searchQuery.trim());
+  };
+
+  const filteredProperties = useMemo(() => {
+    return initialProperties.filter((property) => {
+      // 1. Text Search filter (title, location, description, address)
+      const query = (filters.location || searchQuery).toLowerCase().trim();
+      if (query) {
+        const matchesTitle = (property.title || '').toLowerCase().includes(query);
+        const matchesLocation = (property.location || '').toLowerCase().includes(query);
+        const matchesDesc = (property.description || '').toLowerCase().includes(query);
+        const matchesAddress = (property.address || '').toLowerCase().includes(query);
+        if (!matchesTitle && !matchesLocation && !matchesDesc && !matchesAddress) {
+          return false;
+        }
+      }
+
+      // 2. Price filter
+      if (filters.minPrice && property.price < filters.minPrice) return false;
+      if (filters.maxPrice && property.price > filters.maxPrice) return false;
+
+      // 3. Property Type filter
+      if (filters.type && filters.type !== 'all') {
+        const propType = (property.status || '').toLowerCase();
+        const propTitle = (property.title || '').toLowerCase();
+        const requestedType = filters.type.toLowerCase();
+        
+        if (requestedType === 'rent' && !propType.includes('rent')) return false;
+        if (requestedType === 'sale' && !propType.includes('sale') && !propType.includes('active')) return false;
+        if (['house', 'apartment', 'villa', 'condo', 'penthouse'].includes(requestedType)) {
+          if (!propTitle.includes(requestedType) && !propType.includes(requestedType)) return false;
+        }
+      }
+
+      // 4. Beds & Baths filter
+      if (filters.beds && (property.beds || 0) < filters.beds) return false;
+      if (filters.baths && (property.baths || 0) < filters.baths) return false;
+
+      // 5. Amenities filter
+      if (filters.amenities && filters.amenities.length > 0) {
+        const propAmenities = (property.amenities || []).map(a => a.toLowerCase());
+        const hasAllSelected = filters.amenities.every(req => 
+          propAmenities.some(pa => pa.includes(req.toLowerCase()))
+        );
+        if (!hasAllSelected) return false;
+      }
+
+      return true;
+    });
+  }, [initialProperties, filters, searchQuery]);
+
+  return (
+    <div className="space-y-8">
+      {/* Search Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="space-y-1">
+          <h1 className="text-4xl font-bold text-[#19322F] tracking-tight">{t("properties.availableProperties")}</h1>
+          <p className="text-muted-foreground">{t("properties.availableSubtitle")}</p>
+        </div>
+        
+        <form onSubmit={handleSearchSubmit} className="flex items-center gap-3">
+          <div className="relative w-full md:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder={t("properties.quickSearch")} 
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setFilter('location', e.target.value);
+              }}
+              className="pl-10 bg-white border-emerald-50 focus-visible:ring-emerald-600 shadow-sm"
+            />
+          </div>
+          <FiltersModal />
+        </form>
+      </div>
+
+      {/* Grid or Empty State */}
+      {filteredProperties.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {filteredProperties.map((property) => (
+            <PropertyCard 
+              key={property.id} 
+              id={property.id}
+              slug={property.slug}
+              title={property.title}
+              location={property.location}
+              price={`$${(property.price || 0).toLocaleString()}`}
+              beds={property.beds}
+              baths={property.baths}
+              area={`${(property.sqft || 0).toLocaleString()} m²`}
+              imageUrl={(property.images && property.images.length > 0) ? property.images[0] : 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop'}
+              status={(property.status || 'active').toUpperCase()}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-3xl p-12 text-center shadow-sm border border-slate-100 max-w-2xl mx-auto my-8">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-[#006655] flex items-center justify-center mx-auto mb-4">
+            <Building2 className="w-8 h-8" />
+          </div>
+          <h3 className="text-2xl font-bold text-[#19322F] mb-2">No se encontraron propiedades</h3>
+          <p className="text-[#5C706D] mb-6">
+            No encontramos inmuebles que coincidan con &quot;{searchQuery || filters.location || 'tus filtros'}&quot;. Prueba buscando con otro término como &quot;Beverly Hills&quot;, &quot;Penthouse&quot; o &quot;Villa&quot;.
+          </p>
+          <Button 
+            onClick={() => {
+              setSearchQuery('');
+              clearFilters();
+            }}
+            className="bg-[#006655] hover:bg-[#005544] text-white px-6 py-2.5 rounded-xl cursor-pointer"
+          >
+            Ver todas las propiedades
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
