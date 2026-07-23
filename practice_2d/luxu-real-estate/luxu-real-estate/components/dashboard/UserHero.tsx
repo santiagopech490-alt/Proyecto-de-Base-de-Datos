@@ -23,7 +23,7 @@ interface UserHeroProps {
 
 const UserHero: React.FC<UserHeroProps> = ({ user }) => {
   const router = useRouter();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatar_url);
   const [fullName, setFullName] = useState<string>(user.full_name || 'User');
@@ -77,10 +77,10 @@ const UserHero: React.FC<UserHeroProps> = ({ user }) => {
         console.warn("DB update skipped or warning:", dbErr);
       }
 
-      toast.success('Avatar updated successfully!');
+      toast.success(language === 'es' ? '¡Foto de perfil actualizada con éxito!' : 'Avatar updated successfully!');
     } catch (error: any) {
       console.error("Avatar upload error:", error);
-      toast.error('Failed to update avatar.');
+      toast.error(language === 'es' ? 'Error al actualizar la foto de perfil.' : 'Failed to update avatar.');
     } finally {
       setUploading(false);
     }
