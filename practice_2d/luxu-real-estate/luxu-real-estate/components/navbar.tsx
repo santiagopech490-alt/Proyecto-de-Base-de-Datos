@@ -15,11 +15,10 @@ import {
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuHeader, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { Globe } from "lucide-react";
-import { FiltersModal } from "@/components/search/FiltersModal";
 
 export function Navbar() {
   const [user, setUser] = useState<any>(null);
@@ -220,21 +219,14 @@ export function Navbar() {
 
           {/* 🔔 Interactive Notifications Dropdown */}
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <div className="relative">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="text-[#19322F] hover:text-[#006655] cursor-pointer"
-                  title="Notificaciones"
-                >
-                  <Bell className="w-5 h-5" />
-                </Button>
+            <DropdownMenuTrigger render={
+              <div className="relative cursor-pointer flex items-center justify-center p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                <Bell className="w-5 h-5 text-[#19322F] hover:text-[#006655]" />
                 {hasUnreadNotifications && (
-                  <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+                  <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
                 )}
               </div>
-            </DropdownMenuTrigger>
+            } />
             <DropdownMenuContent align="end" className="w-80 rounded-2xl p-3 shadow-2xl bg-white border border-slate-100">
               <div className="flex items-center justify-between px-2 py-1 mb-2">
                 <span className="font-bold text-sm text-[#19322F]">Notificaciones</span>
@@ -274,7 +266,7 @@ export function Navbar() {
 
           {user ? (
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+              <DropdownMenuTrigger render={
                 <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
                   <Avatar className="w-9 h-9 ring-2 ring-[#006655]/20 hover:ring-[#006655] transition-all">
                     {(typeof window !== 'undefined' && localStorage.getItem('luxe_user_avatar')) || profile?.avatar_url ? (
@@ -292,7 +284,7 @@ export function Navbar() {
                     {profile?.full_name || 'Mi Cuenta'}
                   </span>
                 </div>
-              </DropdownMenuTrigger>
+              } />
               <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-xl p-2 bg-white">
                 <DropdownMenuItem asChild>
                   <Link href="/profile" className="cursor-pointer font-medium">{t("nav.profile")}</Link>
